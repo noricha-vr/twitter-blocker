@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Twitter Block Setting</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 10px;
+      }
+      #minuteInput {
+        width: 50px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>一時解除時間設定</h1>
+    <p>
+      ツイッターを使いたい時間（分単位）を入力してください。<br />
+      この時間を過ぎると自動的にブロックされます。
+    </p>
+    <input type="number" id="minuteInput" min="1" value="5" /> 分
+    <button id="saveButton">保存</button>
+
+    <script src="popup.js"></script>
+  </body>
+</html> 
