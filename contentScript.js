@@ -5,33 +5,38 @@ function blockPage() {
     return;
   }
 
-  document.documentElement.innerHTML = `
-    <head>
-      <meta charset="UTF-8" />
-      <title>Blocked</title>
-      <style>
-        body {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          height: 100vh;
-          margin: 0;
-          background-color: #fff;
-          font-family: sans-serif;
-        }
-        .blocked-message {
-          text-align: center;
-          font-size: 20px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="blocked-message" id="block-overlay">
-        <p>Twitter は現在ブロック中です。</p>
-        <p>拡張機能アイコンをクリックして一時解除を設定してください。</p>
-      </div>
-    </body>
+  // 既存のコンテンツを非表示に
+  document.body.style.display = 'none';
+
+  // オーバーレイを追加
+  const overlay = document.createElement('div');
+  overlay.id = 'block-overlay';
+  overlay.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: white;
+    z-index: 999999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   `;
+
+  const message = document.createElement('div');
+  message.style.cssText = `
+    text-align: center;
+    font-size: 20px;
+    font-family: sans-serif;
+  `;
+  message.innerHTML = `
+    <p>Twitter は現在ブロック中です。</p>
+    <p>拡張機能アイコンをクリックして一時解除を設定してください。</p>
+  `;
+
+  overlay.appendChild(message);
+  document.body.parentNode.appendChild(overlay);
 }
 
 // 解除されているかどうかをチェックするための関数
