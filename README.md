@@ -31,7 +31,10 @@ Twitterへのアクセスを常時ブロックし、必要な時だけ一時的�
    - 自動的にブロック状態に戻ります
    - 再度使用したい場合は、上記手順を繰り返してください
 
-## ファイル構成 
+## デプロイ
+
+1. デプロイ用の圧縮ファイルを作成　`zip -r twitter-blocker.zip *-x "*.git*" -x "store-assets/*"`
+2. ストアにデプロイする https://chrome.google.com/webstore/devconsole/
 
 ## Privacy Policy
 
