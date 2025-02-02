@@ -15,6 +15,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // chrome.storage.sync に保存
     chrome.storage.sync.set({ unblockUntil }, () => {
+      // 現在のタブを取得してリロード
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0] && (
+          tabs[0].url.includes("twitter.com") || 
+          tabs[0].url.includes("x.com")
+        )) {
+          chrome.tabs.reload(tabs[0].id);
+        }
+      });
+
       alert(`${minutes}分後に再度ブロックが有効になります。`);
       window.close();
     });
