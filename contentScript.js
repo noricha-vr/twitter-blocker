@@ -50,13 +50,29 @@ function blockPage() {
   });
 }
 
+// ブロック解除の処理
+function unblockPage() {
+  const overlay = document.getElementById("block-overlay");
+  if (overlay) {
+    overlay.remove();
+    document.body.style.display = '';
+  }
+}
+
+// 投稿ページかどうかを判定する関数
+function isComposePage() {
+  return window.location.pathname.includes('/compose/');
+}
+
 // 解除されているかどうかをチェックするための関数
 function checkBlockStatus() {
   chrome.storage.sync.get(["unblockUntil"], (result) => {
     const unblockUntil = result.unblockUntil || 0;
     const now = Date.now();
 
-    if (now > unblockUntil) {
+    if (isComposePage()) {
+      unblockPage();
+    } else if (now > unblockUntil) {
       blockPage();
     }
   });
