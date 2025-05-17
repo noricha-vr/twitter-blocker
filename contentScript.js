@@ -36,10 +36,41 @@ function createOverlay() {
     <p style="margin: 0; font-size: 16px; color: #666;">
       拡張機能アイコンをクリックして<br>一時解除を設定してください。
     </p>
+    <div id="usage-chart" style="margin-top:16px;"></div>
   `;
 
   overlay.appendChild(message);
   document.documentElement.appendChild(overlay);
+}
+
+function updateUsageChart() {
+  if (!overlay) return;
+  const container = overlay.querySelector('#usage-chart');
+  if (!container) return;
+  chrome.storage.sync.get(['usageHistory'], ({ usageHistory }) => {
+    const history = usageHistory || {};
+    const today = new Date();
+    const days = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      days.push({ date: key, minutes: history[key] || 0 });
+    }
+
+    const max = Math.max(...days.map((d) => d.minutes), 1);
+    container.innerHTML = '';
+    const chart = document.createElement('div');
+    chart.style.cssText = 'display:flex;align-items:flex-end;height:100px;gap:2px;';
+    days.forEach((d) => {
+      const bar = document.createElement('div');
+      const h = (d.minutes / max) * 100;
+      bar.style.cssText = `flex:1;background:#1da1f2;height:${h}%;`;
+      bar.title = `${d.date}: ${d.minutes}分`;
+      chart.appendChild(bar);
+    });
+    container.appendChild(chart);
+  });
 }
 
 function updateOverlay() {
@@ -53,6 +84,7 @@ function updateOverlay() {
     } else {
       overlay.style.display = 'none';
     }
+    updateUsageChart();
   });
 }
 
