@@ -1,0 +1,11 @@
+{
+  "name": "twitter-blocker",
+  "version": "1.1.0",
+  "scripts": {
+    "build": "bun build src/popup.jsx --outfile=popup.js --target=browser --format=iife && bun build src/options.jsx --outfile=options.js --target=browser --format=iife"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
