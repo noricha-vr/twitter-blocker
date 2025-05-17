@@ -43,7 +43,7 @@ Twitterへのアクセスを常時ブロックし、必要な時だけ一時的�
 
 ## デプロイ
 
-1. デプロイ用の圧縮ファイルを作成　`zip -r twitter-blocker.zip *-x "*.git*" -x "store-assets/*"`
+1. デプロイ用の圧縮ファイルを作成　`zip -r twitter-blocker.zip . -x "*.git*" -x "store-assets/*" -x "twitter-blocker.zip" -x "*.DS_Store" -x "knowledge/*" -x "icon/twitter-blocker.png" -x "icon/icon.png"`
 2. ストアにデプロイする https://chrome.google.com/webstore/devconsole/
 
 ## Privacy Policy
