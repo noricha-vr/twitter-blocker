@@ -60,8 +60,21 @@ function updateUsageChart() {
 
     const max = Math.max(...days.map((d) => d.minutes), 1);
     container.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex;align-items:flex-end;height:100px;font-size:10px;';
+
+    const yAxis = document.createElement('div');
+    yAxis.style.cssText = 'display:flex;flex-direction:column;justify-content:space-between;height:100%;margin-right:4px;text-align:right;';
+    for (let i = 4; i >= 0; i--) {
+      const tick = document.createElement('div');
+      tick.style.flex = '1';
+      tick.textContent = Math.round((max / 4) * i);
+      yAxis.appendChild(tick);
+    }
+
     const chart = document.createElement('div');
-    chart.style.cssText = 'display:flex;align-items:flex-end;height:100px;gap:2px;';
+    chart.style.cssText = 'display:flex;align-items:flex-end;height:100%;gap:2px;flex:1;';
     days.forEach((d) => {
       const bar = document.createElement('div');
       const h = (d.minutes / max) * 100;
@@ -69,7 +82,20 @@ function updateUsageChart() {
       bar.title = `${d.date}: ${d.minutes}分`;
       chart.appendChild(bar);
     });
-    container.appendChild(chart);
+
+    wrapper.appendChild(yAxis);
+    wrapper.appendChild(chart);
+    container.appendChild(wrapper);
+
+    const xAxis = document.createElement('div');
+    xAxis.style.cssText = 'display:flex;font-size:10px;margin-top:2px;gap:2px;';
+    days.forEach((d) => {
+      const label = document.createElement('div');
+      label.style.cssText = 'flex:1;text-align:center;';
+      label.textContent = new Date(d.date).getDate();
+      xAxis.appendChild(label);
+    });
+    container.appendChild(xAxis);
   });
 }
 
