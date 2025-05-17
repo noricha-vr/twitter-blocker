@@ -1,12 +1,9 @@
-// ページをブロックするための処理
-function blockPage() {
-  // すでにブロック済みなら何もしないようにする
-  if (document.getElementById("block-overlay")) {
-    return;
-  }
+let overlay;
 
-  // オーバーレイを追加
-  const overlay = document.createElement('div');
+function createOverlay() {
+  if (overlay) return;
+
+  overlay = document.createElement('div');
   overlay.id = 'block-overlay';
   overlay.style.cssText = `
     position: fixed;
@@ -42,30 +39,28 @@ function blockPage() {
   `;
 
   overlay.appendChild(message);
-  document.body.parentNode.appendChild(overlay);
-
-  // 既存のコンテンツを非表示に（オーバーレイを表示してから）
-  requestAnimationFrame(() => {
-    document.body.style.display = 'none';
-  });
+  document.documentElement.appendChild(overlay);
 }
 
-// 解除されているかどうかをチェックするための関数
-function checkBlockStatus() {
+function updateOverlay() {
   chrome.storage.sync.get(["unblockUntil"], (result) => {
+    createOverlay();
     const unblockUntil = result.unblockUntil || 0;
     const now = Date.now();
 
     if (now > unblockUntil) {
-      blockPage();
+      overlay.style.display = 'flex';
+    } else {
+      overlay.style.display = 'none';
     }
   });
 }
 
-// できるだけ早くチェックを実行
-checkBlockStatus();
+updateOverlay();
+setInterval(updateOverlay, 10 * 1000);
 
-// ページ表示中も10秒ごとにチェックし続けて、解除期限を過ぎたら即ブロック
-const intervalId = setInterval(() => {
-  checkBlockStatus();
-}, 10 * 1000); 
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.action === 'updateOverlay') {
+    updateOverlay();
+  }
+});
