@@ -21,7 +21,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     chrome.storage.sync.get(["usageHistory"], ({ usageHistory }) => {
       const history = usageHistory || {};
-      const today = new Date().toISOString().slice(0, 10);
+      // Use the user's local timezone when recording the date
+      const today = new Date().toLocaleDateString('sv-SE');
       history[today] = (history[today] || 0) + minutes;
 
       const cutoff = new Date();

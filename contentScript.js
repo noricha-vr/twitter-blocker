@@ -54,7 +54,8 @@ function updateUsageChart() {
     for (let i = 29; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      // Use the user's local timezone when generating the date key
+      const key = d.toLocaleDateString('sv-SE');
       days.push({ date: key, minutes: history[key] || 0 });
     }
 
@@ -92,7 +93,8 @@ function updateUsageChart() {
     days.forEach((d) => {
       const label = document.createElement('div');
       label.style.cssText = 'flex:1;text-align:center;';
-      label.textContent = new Date(d.date).getDate();
+      const [y, m, day] = d.date.split('-').map(Number);
+      label.textContent = new Date(y, m - 1, day).getDate();
       xAxis.appendChild(label);
     });
     container.appendChild(xAxis);
