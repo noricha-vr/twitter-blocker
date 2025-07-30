@@ -15,19 +15,23 @@ Twitter Blocker is a Chrome extension (Manifest V3) that blocks access to Twitte
    - Updates blocking state every 10 seconds
    - Displays usage history chart on the overlay
    - Responds to messages from popup to update overlay state
+   - Sends message to background worker when block is activated for redirect
 
 2. **Popup (popup.html/popup.js)**
    - Provides UI for setting temporary unblock duration
    - Saves usage history with user's local timezone
    - Stores default unblock duration for convenience
    - Sends messages to content script to update overlay
+   - Allows setting redirect URL with validation
 
 3. **Options Page (options.html/options.js)**
    - Currently stores start/end time settings (feature appears incomplete)
    - Located at chrome-extension://[id]/options.html
 
-4. **Background Service Worker**
-   - None currently implemented (Manifest V3 ready)
+4. **Background Service Worker (background.js)**
+   - Handles redirect URL functionality
+   - Opens new tab with configured URL when Twitter is blocked
+   - Validates URLs before opening
 
 ### Data Storage
 
@@ -36,6 +40,7 @@ Uses Chrome Storage Sync API for:
 - `defaultMinutes`: Last used unblock duration
 - `usageHistory`: Object mapping dates (YYYY-MM-DD) to minutes used
 - `startTime`/`endTime`: Time-based blocking settings (incomplete feature)
+- `redirectURL`: URL to open when Twitter is blocked
 
 ### Key Implementation Details
 
@@ -61,6 +66,10 @@ zip -r twitter-blocker.zip . -x "*.git*" -x "store-assets/*" -x "twitter-blocker
 # 3. Verify overlay appears
 # 4. Test unblock functionality via popup
 # 5. Wait for timer expiration and verify re-blocking
+# 6. Test redirect URL functionality:
+#    - Set a redirect URL in popup
+#    - Wait for block to activate
+#    - Verify new tab opens with configured URL
 ```
 
 ### Development
@@ -89,6 +98,7 @@ zip -r twitter-blocker.zip . -x "*.git*" -x "store-assets/*" -x "twitter-blocker
 
 2. **Permissions**
    - `storage`: For saving settings and usage history
+   - `tabs`: For creating new tabs with redirect URL
    - Host permissions for `*://x.com/*` and `*://twitter.com/*`
 
 3. **Future Considerations**

@@ -2,59 +2,212 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>Twitter Block Setting</title>
+    <title>Twitter Blocker</title>
     <style>
       body {
-        font-family: sans-serif;
-        margin: 16px;
-        width: 300px;
-        min-height: 150px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 20px;
+        width: 320px;
+        background: #f8f9fa;
       }
-      h1 {
-        font-size: 18px;
-        margin: 0 0 16px 0;
+      
+      /* ヘッダー */
+      .header {
+        text-align: center;
+        margin-bottom: 24px;
       }
-      p {
+      
+      .header h1 {
+        font-size: 20px;
+        margin: 0 0 4px 0;
+        color: #1a1a1a;
+        font-weight: 600;
+      }
+      
+      .status {
         font-size: 14px;
-        line-height: 1.5;
-        margin: 0 0 16px 0;
+        color: #e74c3c;
+        font-weight: 500;
       }
-      .input-group {
+      
+      /* メインセクション */
+      .section {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      
+      .section-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #666;
+        margin: 0 0 12px 0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      
+      /* 時間入力エリア */
+      .time-input-container {
         display: flex;
         align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      
+      .time-input-wrapper {
+        flex: 1;
+        position: relative;
+      }
+      
+      #minuteInput {
+        width: 100%;
+        padding: 12px 16px;
+        font-size: 24px;
+        font-weight: 600;
+        border: 2px solid #e1e8ed;
+        border-radius: 8px;
+        text-align: center;
+        transition: all 0.2s;
+      }
+      
+      #minuteInput:focus {
+        outline: none;
+        border-color: #1da1f2;
+      }
+      
+      .time-unit {
+        font-size: 18px;
+        color: #666;
+        font-weight: 500;
+      }
+      
+      /* ボタン */
+      .primary-button {
+        width: 100%;
+        padding: 14px 24px;
+        font-size: 16px;
+        font-weight: 600;
+        color: white;
+        background: #1da1f2;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      
+      .primary-button:hover {
+        background: #1a91da;
+        transform: translateY(-1px);
+      }
+      
+      .primary-button:active {
+        transform: translateY(0);
+      }
+      
+      /* クイックアクセスボタン */
+      .quick-actions {
+        display: flex;
         gap: 8px;
         margin-bottom: 16px;
       }
-      #minuteInput {
-        width: 60px;
-        padding: 4px 8px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-      }
-      #saveButton {
-        background: #1da1f2;
-        color: white;
-        border: none;
-        padding: 8px 16px;
-        border-radius: 4px;
+      
+      .quick-button {
+        flex: 1;
+        padding: 8px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        color: #666;
+        background: #f0f3f5;
+        border: 1px solid #e1e8ed;
+        border-radius: 6px;
         cursor: pointer;
+        transition: all 0.2s;
       }
-      #saveButton:hover {
-        background: #1a91da;
+      
+      .quick-button:hover {
+        background: #e1e8ed;
+        color: #1a1a1a;
+      }
+      
+      .quick-button.active {
+        color: #1da1f2;
+        border-color: #1da1f2;
+        background: #e8f5fe;
       }
     </style>
   </head>
   <body>
-    <h1>一時解除時間設定</h1>
-    <p>
-      ツイッターを使いたい時間（分単位）を入力してください。<br />
-      この時間を過ぎると自動的にブロックされます。
-    </p>
-    <div class="input-group">
-      <input type="number" id="minuteInput" min="1" value="5" />
-      <span>分</span>
-      <button id="saveButton">保存</button>
+    <div class="header">
+      <h1>Twitter Blocker</h1>
+      <div class="status">🔒 現在ブロック中</div>
     </div>
+    
+    <div class="section">
+      <h2 class="section-title">一時解除</h2>
+      
+      <div class="quick-actions">
+        <button class="quick-button" data-minutes="5">5分</button>
+        <button class="quick-button" data-minutes="10">10分</button>
+        <button class="quick-button" data-minutes="15">15分</button>
+        <button class="quick-button" data-minutes="30">30分</button>
+      </div>
+      
+      <div class="time-input-container">
+        <div class="time-input-wrapper">
+          <input type="number" id="minuteInput" min="1" max="120" value="5" />
+        </div>
+        <span class="time-unit">分間</span>
+      </div>
+      
+      <button id="saveButton" class="primary-button">
+        ブロックを解除
+      </button>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title">リダイレクト設定</h2>
+      
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 14px; color: #666; display: block; margin-bottom: 8px;">
+          ブロック時に開くURL（オプション）
+        </label>
+        <input 
+          type="url" 
+          id="redirectUrlInput" 
+          placeholder="https://example.com" 
+          style="width: 100%; padding: 10px 12px; font-size: 14px; border: 2px solid #e1e8ed; border-radius: 8px; box-sizing: border-box; transition: all 0.2s;"
+        />
+      </div>
+      
+      <button 
+        id="saveUrlButton"
+        style="width: 100%; padding: 10px 16px; font-size: 14px; font-weight: 500; color: #1da1f2; background: white; border: 2px solid #1da1f2; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+        onmouseover="this.style.background='#e8f5fe'" 
+        onmouseout="this.style.background='white'"
+      >
+        URLを保存
+      </button>
+      
+      <div id="urlStatus" style="margin-top: 8px; font-size: 12px; color: #28a745; display: none;">
+        ✓ 保存しました
+      </div>
+    </div>
+    
+    <style>
+      #redirectUrlInput:focus {
+        outline: none;
+        border-color: #1da1f2;
+      }
+      
+      /* セクション間のスペース調整 */
+      .section + .section {
+        margin-top: 16px;
+      }
+    </style>
+    
     <script src="popup.js"></script>
   </body>
 </html> 
