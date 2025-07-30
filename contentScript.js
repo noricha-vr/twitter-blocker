@@ -1,4 +1,6 @@
 let overlay;
+let lastBlockState = undefined;  // 前回のブロック状態（undefined: 初回, true: ブロック中, false: 解除中）
+let lastUnblockUntil = 0;       // 前回チェック時のunblockUntil値
 
 function createOverlay() {
   if (overlay) return;
@@ -106,12 +108,36 @@ function updateOverlay() {
     createOverlay();
     const unblockUntil = result.unblockUntil || 0;
     const now = Date.now();
+    const isBlocked = now > unblockUntil;
+    
+    // 時間切れ検出：解除状態→ブロック状態への遷移を検出
+    const isTimeExpired = 
+      lastBlockState === false &&      // 前回は解除されていた
+      isBlocked &&                     // 今回はブロックされている
+      lastUnblockUntil === unblockUntil;  // 同じ解除セッション内での時間切れ
 
-    if (now > unblockUntil) {
+    if (isBlocked) {
       overlay.style.display = 'flex';
+      
+      // 時間切れの場合のみリダイレクト
+      if (isTimeExpired) {
+        // Background service worker にリダイレクトリクエストを送信
+        chrome.runtime.sendMessage({ action: 'openRedirectURL' }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error sending message:', chrome.runtime.lastError);
+          } else if (response) {
+            console.log('Redirect response:', response);
+          }
+        });
+      }
     } else {
       overlay.style.display = 'none';
     }
+    
+    // 状態を更新
+    lastBlockState = isBlocked;
+    lastUnblockUntil = unblockUntil;
+    
     updateUsageChart();
   });
 }
