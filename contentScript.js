@@ -13,6 +13,15 @@ let lastUnblockUntil = 0;        // 前回チェック時のunblockUntil値
 let pendingRedirect = false;     // 投稿中に抑止したリダイレクトを後で実行するためのフラグ
 let lastComposerVisible = false; // 直近の投稿画面表示状態
 
+function isActivePage() {
+  try {
+    // タブが前面かつウィンドウがフォーカスされているか
+    return document.visibilityState === 'visible' && document.hasFocus();
+  } catch (_) {
+    return true;
+  }
+}
+
 function isElementVisible(element) {
   if (!element) return false;
   const rect = element.getBoundingClientRect();
@@ -51,6 +60,11 @@ function setupComposerObserver() {
     }
   });
   observer.observe(document.documentElement, { subtree: true, childList: true, attributes: false });
+
+  // タブの可視状態やフォーカス変化に応じて即時反映
+  document.addEventListener('visibilitychange', updateOverlay);
+  window.addEventListener('focus', updateOverlay);
+  window.addEventListener('blur', updateOverlay);
 }
 
 function createOverlay() {
@@ -64,7 +78,7 @@ function createOverlay() {
     left: 0;
     width: 100%;
     height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #2f2f2f; /* 背景はカードより暗い灰色 */
     z-index: 999999;
     display: flex;
     justify-content: center;
@@ -100,7 +114,7 @@ function createOverlay() {
 
   const container = document.createElement('div');
   container.style.cssText = `
-    max-width: 600px;
+    max-width: 680px; /* 説明文が1行に収まるよう少し拡張 */
     width: 90%;
     animation: slideUp 0.5s ease forwards;
   `;
@@ -116,23 +130,6 @@ function createOverlay() {
     text-align: center;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   `;
-
-  // アイコン
-  const icon = document.createElement('div');
-  icon.style.cssText = `
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 24px;
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 40px;
-    color: white;
-    animation: pulse 2s ease-in-out infinite;
-  `;
-  icon.innerHTML = '🚫';
 
   // 主要メッセージ（認知的に最も重要）
   const mainMessage = document.createElement('h1');
@@ -155,76 +152,14 @@ function createOverlay() {
   `;
   subMessage.innerHTML = '集中力を保つため、現在アクセスが制限されています';
 
-  // アクションセクション
-  const actionSection = document.createElement('div');
-  actionSection.style.cssText = `
-    background: #f8f9fa;
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 32px;
+  // 解除方法（1行の説明）
+  const instruction = document.createElement('p');
+  instruction.style.cssText = `
+    margin: -16px 0 28px; /* 直前の説明とやや近づける */
+    font-size: 14px;
+    color: #95a5a6;
   `;
-
-  const actionTitle = document.createElement('h3');
-  actionTitle.style.cssText = `
-    margin: 0 0 12px;
-    font-size: 16px;
-    font-weight: 600;
-    color: #34495e;
-  `;
-  actionTitle.textContent = '一時的に解除するには';
-
-  const actionSteps = document.createElement('div');
-  actionSteps.style.cssText = `
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin-top: 16px;
-  `;
-
-  // ステップインジケーター
-  const steps = [
-    { icon: '🧩', text: '拡張機能アイコン' },
-    { icon: '➡️', text: '' },
-    { icon: '⏱️', text: '時間を設定' },
-    { icon: '➡️', text: '' },
-    { icon: '✅', text: '解除' }
-  ];
-
-  steps.forEach((step, index) => {
-    const stepDiv = document.createElement('div');
-    if (step.text) {
-      stepDiv.style.cssText = `
-        text-align: center;
-        ${index === 0 || index === 2 || index === 4 ? `
-          background: white;
-          padding: 12px 16px;
-          border-radius: 12px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        ` : ''}
-      `;
-      const stepIcon = document.createElement('div');
-      stepIcon.style.cssText = 'font-size: 24px; margin-bottom: 4px;';
-      stepIcon.textContent = step.icon;
-      
-      if (step.text !== '') {
-        const stepText = document.createElement('div');
-        stepText.style.cssText = 'font-size: 12px; color: #7f8c8d;';
-        stepText.textContent = step.text;
-        stepDiv.appendChild(stepIcon);
-        stepDiv.appendChild(stepText);
-      } else {
-        stepDiv.appendChild(stepIcon);
-      }
-    } else {
-      stepDiv.style.cssText = 'font-size: 20px; color: #bdc3c7;';
-      stepDiv.textContent = step.icon;
-    }
-    actionSteps.appendChild(stepDiv);
-  });
-
-  actionSection.appendChild(actionTitle);
-  actionSection.appendChild(actionSteps);
+  instruction.textContent = '一時的に解除するには、拡張機能アイコンをクリックして時間を設定してください。';
 
   // 使用履歴セクション
   const usageSection = document.createElement('div');
@@ -256,10 +191,9 @@ function createOverlay() {
   usageSection.appendChild(chartContainer);
 
   // 要素を組み立て
-  card.appendChild(icon);
   card.appendChild(mainMessage);
   card.appendChild(subMessage);
-  card.appendChild(actionSection);
+  card.appendChild(instruction);
   card.appendChild(usageSection);
   container.appendChild(card);
   overlay.appendChild(container);
@@ -472,6 +406,7 @@ function updateOverlay() {
     const now = Date.now();
     const isBlocked = now > unblockUntil;
     const composing = isComposerOpen();
+    const active = isActivePage();
     
     // デバッグログ
     console.log('[Twitter Blocker Debug]', {
@@ -498,12 +433,16 @@ function updateOverlay() {
           pendingRedirect = true;
         }
       } else {
-        // 投稿していない場合は通常通り表示・リダイレクト
-        showOverlay();
-        if (isTimeExpired || pendingRedirect) {
-          pendingRedirect = false;
-          // Background service worker にリダイレクトリクエストを送信
-          requestRedirect();
+        // 投稿していない場合でも、アクティブなページのみオーバーレイ/リダイレクト
+        if (active) {
+          showOverlay();
+          if (isTimeExpired || pendingRedirect) {
+            pendingRedirect = false;
+            // Background service worker にリダイレクトリクエストを送信
+            requestRedirect();
+          }
+        } else {
+          hideOverlay();
         }
       }
     } else {
