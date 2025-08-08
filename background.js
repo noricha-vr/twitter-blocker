@@ -41,14 +41,55 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Throws if invalid
             new URL(redirectURL);
 
-            // Create a new tab with the redirect URL
-            chrome.tabs.create({ url: redirectURL }, (tab) => {
-              if (chrome.runtime.lastError) {
-                console.error('Error creating tab:', chrome.runtime.lastError);
-                sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            // Try to reuse an existing tab for this URL to avoid tab clutter
+            chrome.storage.local.get(['redirectTabMap'], (mapResult) => {
+              const redirectTabMap = mapResult.redirectTabMap || {};
+              const existingTabId = redirectTabMap[redirectURL];
+
+              if (existingTabId !== undefined) {
+                chrome.tabs.get(existingTabId, (existingTab) => {
+                  if (chrome.runtime.lastError || !existingTab) {
+                    // The stored tab no longer exists; create a new one
+                    chrome.tabs.create({ url: redirectURL }, (tab) => {
+                      if (chrome.runtime.lastError) {
+                        console.error('Error creating tab:', chrome.runtime.lastError);
+                        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                      } else {
+                        redirectTabMap[redirectURL] = tab.id;
+                        chrome.storage.local.set({ redirectTabMap }, () => {
+                          console.log('Redirect tab created:', tab.id);
+                          sendResponse({ success: true, reused: false, tabId: tab.id });
+                        });
+                      }
+                    });
+                  } else {
+                    // Reuse existing tab: activate and focus its window
+                    chrome.windows.update(existingTab.windowId, { focused: true }, () => {
+                      chrome.tabs.update(existingTab.id, { active: true }, () => {
+                        if (chrome.runtime.lastError) {
+                          console.error('Error focusing existing tab:', chrome.runtime.lastError);
+                          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                        } else {
+                          sendResponse({ success: true, reused: true, tabId: existingTab.id });
+                        }
+                      });
+                    });
+                  }
+                });
               } else {
-                console.log('Redirect tab created:', tab.id);
-                sendResponse({ success: true });
+                // No stored tab; create a new one and remember it
+                chrome.tabs.create({ url: redirectURL }, (tab) => {
+                  if (chrome.runtime.lastError) {
+                    console.error('Error creating tab:', chrome.runtime.lastError);
+                    sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                  } else {
+                    redirectTabMap[redirectURL] = tab.id;
+                    chrome.storage.local.set({ redirectTabMap }, () => {
+                      console.log('Redirect tab created:', tab.id);
+                      sendResponse({ success: true, reused: false, tabId: tab.id });
+                    });
+                  }
+                });
               }
             });
           } catch (error) {
@@ -70,4 +111,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Log when the service worker is installed
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Twitter Blocker service worker installed');
+});
+
+// Cleanup mapping when a stored redirect tab is closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+  chrome.storage.local.get(['redirectTabMap'], (mapResult) => {
+    const redirectTabMap = mapResult.redirectTabMap || {};
+    let changed = false;
+    for (const [url, storedId] of Object.entries(redirectTabMap)) {
+      if (storedId === tabId) {
+        delete redirectTabMap[url];
+        changed = true;
+      }
+    }
+    if (changed) {
+      chrome.storage.local.set({ redirectTabMap });
+    }
+  });
 });
