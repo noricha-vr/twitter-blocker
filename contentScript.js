@@ -433,16 +433,13 @@ function updateOverlay() {
           pendingRedirect = true;
         }
       } else {
-        // 投稿していない場合でも、アクティブなページのみオーバーレイ/リダイレクト
-        if (active) {
-          showOverlay();
-          if (isTimeExpired || pendingRedirect) {
-            pendingRedirect = false;
-            // Background service worker にリダイレクトリクエストを送信
-            requestRedirect();
-          }
-        } else {
-          hideOverlay();
+        // 投稿していない場合は常にオーバーレイを表示。
+        // リダイレクトはアクティブタブのときのみ発火させる。
+        showOverlay();
+        if (active && (isTimeExpired || pendingRedirect)) {
+          pendingRedirect = false;
+          // Background service worker にリダイレクトリクエストを送信
+          requestRedirect();
         }
       }
     } else {
