@@ -90,18 +90,37 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                       existingTabId,
                       error: chrome.runtime.lastError && chrome.runtime.lastError.message,
                     });
-                    // The stored tab no longer exists; create a new one
-                    chrome.tabs.create({ url: redirectURL }, (tab) => {
-                      if (chrome.runtime.lastError) {
-                        addLog('openRedirectURL:createError', { error: chrome.runtime.lastError.message });
-                        console.error('Error creating tab:', chrome.runtime.lastError);
-                        sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                    // Before creating a new one, double-check if any tab already has the same URL (normalized)
+                    findTabByUrlLoose(redirectURL, (foundTab) => {
+                      if (foundTab) {
+                        addLog('openRedirectURL:foundBySearch', { tabId: foundTab.id });
+                        chrome.windows.update(foundTab.windowId, { focused: true }, () => {
+                          chrome.tabs.update(foundTab.id, { active: true }, () => {
+                            redirectTabMap[redirectURL] = foundTab.id;
+                            chrome.storage.local.set({ redirectTabMap }, () => {
+                              sendResponse({ success: true, reused: true, tabId: foundTab.id });
+                            });
+                          });
+                        });
                       } else {
-                        addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
-                        redirectTabMap[redirectURL] = tab.id;
+                        // Mark creating to prevent racing creators
+                        redirectTabMap[redirectURL] = -1;
                         chrome.storage.local.set({ redirectTabMap }, () => {
-                          console.log('Redirect tab created:', tab.id);
-                          sendResponse({ success: true, reused: false, tabId: tab.id });
+                          addLog('openRedirectURL:creatingSentinelSet', {});
+                          chrome.tabs.create({ url: redirectURL }, (tab) => {
+                            if (chrome.runtime.lastError) {
+                              addLog('openRedirectURL:createError', { error: chrome.runtime.lastError.message });
+                              console.error('Error creating tab:', chrome.runtime.lastError);
+                              sendResponse({ success: false, error: chrome.runtime.lastError.message });
+                            } else {
+                              addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
+                              redirectTabMap[redirectURL] = tab.id;
+                              chrome.storage.local.set({ redirectTabMap }, () => {
+                                console.log('Redirect tab created:', tab.id);
+                                sendResponse({ success: true, reused: false, tabId: tab.id });
+                              });
+                            }
+                          });
                         });
                       }
                     });
@@ -122,21 +141,58 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   }
                 });
               } else {
-                // No stored tab; create a new one and remember it
-                chrome.tabs.create({ url: redirectURL }, (tab) => {
-                  if (chrome.runtime.lastError) {
-                    addLog('openRedirectURL:createError', { error: chrome.runtime.lastError.message });
-                    console.error('Error creating tab:', chrome.runtime.lastError);
-                    sendResponse({ success: false, error: chrome.runtime.lastError.message });
-                  } else {
-                    addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
-                    redirectTabMap[redirectURL] = tab.id;
-                    chrome.storage.local.set({ redirectTabMap }, () => {
-                      console.log('Redirect tab created:', tab.id);
-                      sendResponse({ success: true, reused: false, tabId: tab.id });
+                // Either there is no mapping or a previous creator wrote a sentinel (-1)
+                if (redirectTabMap[redirectURL] === -1) {
+                  // Wait briefly, then try to reuse whatever was created
+                  addLog('openRedirectURL:waitingForCreator', {});
+                  setTimeout(() => {
+                    chrome.storage.local.get(['redirectTabMap'], (reget) => {
+                      const map2 = reget.redirectTabMap || {};
+                      const tabId2 = map2[redirectURL];
+                      if (tabId2 && tabId2 !== -1) {
+                        chrome.tabs.get(tabId2, (t2) => {
+                          if (chrome.runtime.lastError || !t2) {
+                            // Fallback to search
+                            findTabByUrlLoose(redirectURL, (found) => {
+                              if (found) {
+                                chrome.windows.update(found.windowId, { focused: true }, () => {
+                                  chrome.tabs.update(found.id, { active: true }, () => {
+                                    map2[redirectURL] = found.id;
+                                    chrome.storage.local.set({ redirectTabMap: map2 }, () => {
+                                      sendResponse({ success: true, reused: true, tabId: found.id });
+                                    });
+                                  });
+                                });
+                              } else {
+                                // Creator failed; clear sentinel and create ourselves
+                                delete map2[redirectURL];
+                                chrome.storage.local.set({ redirectTabMap: map2 }, () => {
+                                  createAndStoreRedirectTab(redirectURL, sendResponse);
+                                });
+                              }
+                            });
+                          } else {
+                            chrome.windows.update(t2.windowId, { focused: true }, () => {
+                              chrome.tabs.update(t2.id, { active: true }, () => {
+                                sendResponse({ success: true, reused: true, tabId: t2.id });
+                              });
+                            });
+                          }
+                        });
+                      } else {
+                        // No tab yet, create now
+                        createAndStoreRedirectTab(redirectURL, sendResponse);
+                      }
                     });
-                  }
-                });
+                  }, 300);
+                } else {
+                  // No stored tab; create a new one and remember it, with sentinel to avoid races
+                  redirectTabMap[redirectURL] = -1;
+                  chrome.storage.local.set({ redirectTabMap }, () => {
+                    addLog('openRedirectURL:creatingSentinelSet', {});
+                    createAndStoreRedirectTab(redirectURL, sendResponse);
+                  });
+                }
               }
             });
           } catch (error) {
@@ -224,3 +280,45 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     }
   });
 });
+
+// Helpers
+function normalizeUrlForMatch(urlString) {
+  try {
+    const u = new URL(urlString);
+    // Ignore query and hash, ignore trailing slash differences
+    const pathname = u.pathname.replace(/\/$/, '');
+    return `${u.origin}${pathname}`;
+  } catch (_) {
+    return urlString;
+  }
+}
+
+function findTabByUrlLoose(urlString, cb) {
+  const target = normalizeUrlForMatch(urlString);
+  chrome.tabs.query({}, (tabs) => {
+    const found = tabs.find((t) => {
+      if (!t.url) return false;
+      const cand = normalizeUrlForMatch(t.url);
+      return cand === target;
+    });
+    cb(found);
+  });
+}
+
+function createAndStoreRedirectTab(redirectURL, sendResponse) {
+  chrome.tabs.create({ url: redirectURL }, (tab) => {
+    if (chrome.runtime.lastError) {
+      addLog('openRedirectURL:createError', { error: chrome.runtime.lastError.message });
+      sendResponse({ success: false, error: chrome.runtime.lastError.message });
+    } else {
+      chrome.storage.local.get(['redirectTabMap'], (res) => {
+        const map = res.redirectTabMap || {};
+        map[redirectURL] = tab.id;
+        chrome.storage.local.set({ redirectTabMap: map }, () => {
+          addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
+          sendResponse({ success: true, reused: false, tabId: tab.id });
+        });
+      });
+    }
+  });
+}
