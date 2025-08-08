@@ -50,15 +50,18 @@
       }
       
       /* 時間入力エリア */
-      .time-input-container {
-        display: flex;
-        align-items: center;
+      .duration-grid {
+        display: grid;
+        grid-template-columns: 1fr 140px;
         gap: 12px;
+        align-items: stretch;
         margin-bottom: 16px;
+      }
+      .time-input-container {
+        display: block;
       }
       
       .time-input-wrapper {
-        flex: 1;
         position: relative;
       }
       
@@ -71,6 +74,7 @@
         border-radius: 8px;
         text-align: center;
         transition: all 0.2s;
+        padding-right: 56px; /* 単位分の余白 */
       }
       
       #minuteInput:focus {
@@ -79,9 +83,14 @@
       }
       
       .time-unit {
-        font-size: 18px;
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 16px;
         color: #666;
-        font-weight: 500;
+        font-weight: 600;
+        pointer-events: none;
       }
       
       /* ボタン */
@@ -96,6 +105,14 @@
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
+      }
+
+      /* 2カラム時はボタンを入力欄の高さに合わせる */
+      .duration-grid .primary-button {
+        height: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
       }
       
       .primary-button:hover {
@@ -155,16 +172,17 @@
         <button class="quick-button" data-minutes="30">30分</button>
       </div>
       
-      <div class="time-input-container">
-        <div class="time-input-wrapper">
-          <input type="number" id="minuteInput" min="1" max="120" value="5" />
+      <div class="duration-grid">
+        <div class="time-input-container">
+          <div class="time-input-wrapper">
+            <input type="number" id="minuteInput" min="1" max="120" value="5" aria-label="解除する分数" />
+            <span class="time-unit">分</span>
+          </div>
         </div>
-        <span class="time-unit">分間</span>
+        <button id="saveButton" class="primary-button" aria-label="指定時間でブロックを解除">
+          ブロックを解除
+        </button>
       </div>
-      
-      <button id="saveButton" class="primary-button">
-        ブロックを解除
-      </button>
     </div>
     
     <div class="section">
