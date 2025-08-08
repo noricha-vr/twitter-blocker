@@ -1,7 +1,16 @@
+// ===== Constants =====
+const OVERLAY_ID = 'block-overlay';
+const CHECK_INTERVAL_MS = 10 * 1000;
+const STORAGE_KEYS = {
+  unblockUntil: 'unblockUntil',
+  usageHistory: 'usageHistory',
+};
+
+// ===== Mutable state =====
 let overlay;
 let lastBlockState = undefined;  // 前回のブロック状態（undefined: 初回, true: ブロック中, false: 解除中）
-let lastUnblockUntil = 0;       // 前回チェック時のunblockUntil値
-let pendingRedirect = false;    // 投稿中に発火を抑止したリダイレクトを後で実行するためのフラグ
+let lastUnblockUntil = 0;        // 前回チェック時のunblockUntil値
+let pendingRedirect = false;     // 投稿中に抑止したリダイレクトを後で実行するためのフラグ
 let lastComposerVisible = false; // 直近の投稿画面表示状態
 
 function isElementVisible(element) {
@@ -48,7 +57,7 @@ function createOverlay() {
   if (overlay) return;
 
   overlay = document.createElement('div');
-  overlay.id = 'block-overlay';
+  overlay.id = OVERLAY_ID;
   overlay.style.cssText = `
     position: fixed;
     top: 0;
@@ -91,7 +100,7 @@ function updateUsageChart() {
   if (!overlay) return;
   const container = overlay.querySelector('#usage-chart');
   if (!container) return;
-  chrome.storage.sync.get(['usageHistory'], ({ usageHistory }) => {
+  chrome.storage.sync.get([STORAGE_KEYS.usageHistory], ({ usageHistory }) => {
     const history = usageHistory || {};
     const today = new Date();
     const days = [];
@@ -146,9 +155,9 @@ function updateUsageChart() {
 }
 
 function updateOverlay() {
-  chrome.storage.sync.get(["unblockUntil"], (result) => {
+  chrome.storage.sync.get([STORAGE_KEYS.unblockUntil], (result) => {
     createOverlay();
-    const unblockUntil = result.unblockUntil || 0;
+    const unblockUntil = result[STORAGE_KEYS.unblockUntil] || 0;
     const now = Date.now();
     const isBlocked = now > unblockUntil;
     const composing = isComposerOpen();
@@ -162,28 +171,22 @@ function updateOverlay() {
     if (isBlocked) {
       if (composing) {
         // 投稿中はオーバーレイもリダイレクトも抑止
-        overlay.style.display = 'none';
+        hideOverlay();
         if (isTimeExpired) {
           // 投稿完了後に即時発火させる
           pendingRedirect = true;
         }
       } else {
         // 投稿していない場合は通常通り表示・リダイレクト
-        overlay.style.display = 'flex';
+        showOverlay();
         if (isTimeExpired || pendingRedirect) {
           pendingRedirect = false;
           // Background service worker にリダイレクトリクエストを送信
-          chrome.runtime.sendMessage({ action: 'openRedirectURL' }, (response) => {
-            if (chrome.runtime.lastError) {
-              console.error('Error sending message:', chrome.runtime.lastError);
-            } else if (response) {
-              console.log('Redirect response:', response);
-            }
-          });
+          requestRedirect();
         }
       }
     } else {
-      overlay.style.display = 'none';
+      hideOverlay();
       pendingRedirect = false;
     }
     
@@ -195,9 +198,28 @@ function updateOverlay() {
   });
 }
 
+function showOverlay() {
+  if (overlay) overlay.style.display = 'flex';
+}
+
+function hideOverlay() {
+  if (overlay) overlay.style.display = 'none';
+}
+
+function requestRedirect() {
+  chrome.runtime.sendMessage({ action: 'openRedirectURL' }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.error('Error sending message:', chrome.runtime.lastError);
+    } else if (response) {
+      // For debug visibility in console
+      try { console.debug('Redirect response:', response); } catch (_) {}
+    }
+  });
+}
+
 updateOverlay();
 setupComposerObserver();
-setInterval(updateOverlay, 10 * 1000);
+setInterval(updateOverlay, CHECK_INTERVAL_MS);
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.action === 'updateOverlay') {
