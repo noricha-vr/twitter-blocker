@@ -29,10 +29,16 @@
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
+      "16": "icon/128.png",
+      "24": "icon/128.png",
+      "32": "icon/128.png",
+      "48": "icon/128.png",
       "128": "icon/128.png"
     }
   },
   "icons": {
+    "16": "icon/128.png",
+    "48": "icon/128.png",
     "128": "icon/128.png"
   }
 } 
