@@ -161,6 +161,17 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // デバッグ: ログのダウンロード/クリア用のキーボードショートカット
+  // Mac: Cmd+D でログダウンロード、Cmd+Backspace でクリア
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "d") {
+      chrome.runtime.sendMessage({ action: "downloadLogs" });
+    }
+    if ((e.metaKey || e.ctrlKey) && (e.key === "Backspace" || e.key.toLowerCase() === "delete")) {
+      chrome.runtime.sendMessage({ action: "clearLogs" });
+    }
+  });
+
   // Enterキーでの送信サポート
   minuteInput.addEventListener("keypress", (e) => {
     if (e.key === "Enter") {

@@ -1,18 +1,48 @@
 // Background Service Worker for Twitter Blocker
 
+// Simple debug logging utilities
+const LOG_KEY = 'debugLogs';
+const MAX_LOGS = 2000;
+
+function addLog(event, details = {}) {
+  try {
+    const entry = {
+      time: new Date().toISOString(),
+      event,
+      details,
+    };
+    chrome.storage.local.get([LOG_KEY], (res) => {
+      const logs = Array.isArray(res[LOG_KEY]) ? res[LOG_KEY] : [];
+      logs.push(entry);
+      const trimmed = logs.length > MAX_LOGS ? logs.slice(logs.length - MAX_LOGS) : logs;
+      chrome.storage.local.set({ [LOG_KEY]: trimmed });
+    });
+  } catch (e) {
+    // Best-effort; avoid throwing inside service worker
+    console.warn('Logging failed:', e);
+  }
+}
+
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'openRedirectURL') {
     const senderTab = sender.tab;
 
+    addLog('openRedirectURL:received', {
+      senderTabId: senderTab && senderTab.id,
+      senderActive: senderTab && senderTab.active,
+    });
+
     // If we cannot determine the sender tab, skip opening
     if (!senderTab) {
+      addLog('openRedirectURL:noSenderTab');
       sendResponse({ success: true, message: 'No sender tab; skipping redirect' });
       return; // synchronous response
     }
 
     // Only proceed if the sender tab is the active tab in its window
     if (!senderTab.active) {
+      addLog('openRedirectURL:senderNotActive', { senderTabId: senderTab.id });
       sendResponse({ success: true, message: 'Sender tab not active; skipping redirect' });
       return; // synchronous response
     }
@@ -20,6 +50,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Ensure the sender tab is also the active tab of the last-focused window
     chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
       if (chrome.runtime.lastError) {
+        addLog('openRedirectURL:queryError', { error: chrome.runtime.lastError.message });
         console.error('Error querying tabs:', chrome.runtime.lastError);
         sendResponse({ success: false, error: chrome.runtime.lastError.message });
         return;
@@ -27,6 +58,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       const activeTabInFocusedWindow = tabs && tabs[0];
       if (!activeTabInFocusedWindow || activeTabInFocusedWindow.id !== senderTab.id) {
+        addLog('openRedirectURL:senderNotInFocusedWindow', {
+          senderTabId: senderTab.id,
+          activeFocusedTabId: activeTabInFocusedWindow && activeTabInFocusedWindow.id,
+        });
         sendResponse({ success: true, message: 'Sender tab not in focused window; skipping redirect' });
         return;
       }
@@ -41,6 +76,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // Throws if invalid
             new URL(redirectURL);
 
+            addLog('openRedirectURL:validated', { redirectURL });
+
             // Try to reuse an existing tab for this URL to avoid tab clutter
             chrome.storage.local.get(['redirectTabMap'], (mapResult) => {
               const redirectTabMap = mapResult.redirectTabMap || {};
@@ -49,12 +86,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               if (existingTabId !== undefined) {
                 chrome.tabs.get(existingTabId, (existingTab) => {
                   if (chrome.runtime.lastError || !existingTab) {
+                    addLog('openRedirectURL:storedTabMissing', {
+                      existingTabId,
+                      error: chrome.runtime.lastError && chrome.runtime.lastError.message,
+                    });
                     // The stored tab no longer exists; create a new one
                     chrome.tabs.create({ url: redirectURL }, (tab) => {
                       if (chrome.runtime.lastError) {
+                        addLog('openRedirectURL:createError', { error: chrome.runtime.lastError.message });
                         console.error('Error creating tab:', chrome.runtime.lastError);
                         sendResponse({ success: false, error: chrome.runtime.lastError.message });
                       } else {
+                        addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
                         redirectTabMap[redirectURL] = tab.id;
                         chrome.storage.local.set({ redirectTabMap }, () => {
                           console.log('Redirect tab created:', tab.id);
@@ -67,9 +110,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     chrome.windows.update(existingTab.windowId, { focused: true }, () => {
                       chrome.tabs.update(existingTab.id, { active: true }, () => {
                         if (chrome.runtime.lastError) {
+                          addLog('openRedirectURL:focusExistingError', { error: chrome.runtime.lastError.message });
                           console.error('Error focusing existing tab:', chrome.runtime.lastError);
                           sendResponse({ success: false, error: chrome.runtime.lastError.message });
                         } else {
+                          addLog('openRedirectURL:reusedExistingTab', { reusedTabId: existingTab.id, redirectURL });
                           sendResponse({ success: true, reused: true, tabId: existingTab.id });
                         }
                       });
@@ -80,9 +125,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 // No stored tab; create a new one and remember it
                 chrome.tabs.create({ url: redirectURL }, (tab) => {
                   if (chrome.runtime.lastError) {
+                    addLog('openRedirectURL:createError', { error: chrome.runtime.lastError.message });
                     console.error('Error creating tab:', chrome.runtime.lastError);
                     sendResponse({ success: false, error: chrome.runtime.lastError.message });
                   } else {
+                    addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
                     redirectTabMap[redirectURL] = tab.id;
                     chrome.storage.local.set({ redirectTabMap }, () => {
                       console.log('Redirect tab created:', tab.id);
@@ -93,11 +140,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               }
             });
           } catch (error) {
+            addLog('openRedirectURL:invalidURL', { redirectURL, error: String(error && error.message) });
             console.error('Invalid URL:', redirectURL);
             sendResponse({ success: false, error: 'Invalid URL format' });
           }
         } else {
           // No redirect URL set, just respond
+          addLog('openRedirectURL:noURLConfigured');
           sendResponse({ success: true, message: 'No redirect URL configured' });
         }
       });
@@ -106,15 +155,60 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // Return true to indicate that we will send a response asynchronously
     return true;
   }
+
+  if (request.action === 'downloadLogs') {
+    chrome.storage.local.get([LOG_KEY], (res) => {
+      const logs = Array.isArray(res[LOG_KEY]) ? res[LOG_KEY] : [];
+      const content = logs.map((l) => {
+        try {
+          return `${l.time}\t${l.event}\t${JSON.stringify(l.details)}`;
+        } catch (_) {
+          return `${l.time}\t${l.event}`;
+        }
+      }).join('\n');
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(content);
+      const filename = `twitter-blocker-logs-${timestamp}.txt`;
+
+      chrome.downloads.download({ url: dataUrl, filename, saveAs: true }, (downloadId) => {
+        if (chrome.runtime.lastError) {
+          addLog('downloadLogs:error', { error: chrome.runtime.lastError.message });
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          addLog('downloadLogs:started', { downloadId, filename });
+          sendResponse({ success: true, downloadId, filename });
+        }
+      });
+    });
+    return true;
+  }
+
+  if (request.action === 'clearLogs') {
+    chrome.storage.local.set({ [LOG_KEY]: [] }, () => {
+      addLog('clearLogs');
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (request.action === 'getLogs') {
+    chrome.storage.local.get([LOG_KEY], (res) => {
+      sendResponse({ success: true, logs: Array.isArray(res[LOG_KEY]) ? res[LOG_KEY] : [] });
+    });
+    return true;
+  }
 });
 
 // Log when the service worker is installed
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Twitter Blocker service worker installed');
+  addLog('serviceWorker:installed');
 });
 
 // Cleanup mapping when a stored redirect tab is closed
 chrome.tabs.onRemoved.addListener((tabId) => {
+  addLog('tabRemoved', { tabId });
   chrome.storage.local.get(['redirectTabMap'], (mapResult) => {
     const redirectTabMap = mapResult.redirectTabMap || {};
     let changed = false;
@@ -126,6 +220,7 @@ chrome.tabs.onRemoved.addListener((tabId) => {
     }
     if (changed) {
       chrome.storage.local.set({ redirectTabMap });
+      addLog('redirectTabMap:cleaned', { tabId });
     }
   });
 });
