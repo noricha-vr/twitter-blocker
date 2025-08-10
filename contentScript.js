@@ -12,6 +12,7 @@ let lastBlockState = undefined;  // 前回のブロック状態（undefined: 初
 let lastUnblockUntil = 0;        // 前回チェック時のunblockUntil値
 let pendingRedirect = false;     // 投稿中に抑止したリダイレクトを後で実行するためのフラグ
 let lastComposerVisible = false; // 直近の投稿画面表示状態
+let lastGrokVisible = false;     // 直近のGrok画面表示状態
 
 function isActivePage() {
   try {
@@ -47,14 +48,58 @@ function isComposerOpen() {
   }
 }
 
-function setupComposerObserver() {
-  // 投稿画面の開閉を監視して、閉じたら即座に反映
+function isGrokOpen() {
+  // Grok画面が開いているかを判定
+  try {
+    // URLベースの検出
+    if (window.location.pathname.includes('/i/grok')) {
+      return true;
+    }
+    
+    // DOM要素ベースの検出（Grokチャット画面の特徴的な要素）
+    // Grok固有のモーダルやチャット要素を探す
+    const grokElements = document.querySelectorAll(
+      '[aria-label*="Grok"], [data-testid*="grok"], .grok-chat, #grok-container'
+    );
+    
+    for (const element of grokElements) {
+      if (isElementVisible(element)) {
+        return true;
+      }
+    }
+    
+    // Grok会話画面の特徴的な要素パターンも検出
+    // 会話IDを含むURLパターン（例: /i/grok?conversation=xxxx）
+    if (window.location.pathname === '/i/grok' && window.location.search.includes('conversation=')) {
+      return true;
+    }
+    
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function setupActivityObserver() {
+  // 投稿画面とGrok画面の開閉を監視して、閉じたら即座に反映
   const observer = new MutationObserver(() => {
     const composing = isComposerOpen();
+    const usingGrok = isGrokOpen();
+    
+    // 投稿画面の状態変化を検出
     if (composing !== lastComposerVisible) {
       lastComposerVisible = composing;
       if (!composing) {
         // 投稿完了（モーダル閉鎖）直後に反映
+        updateOverlay();
+      }
+    }
+    
+    // Grok画面の状態変化を検出
+    if (usingGrok !== lastGrokVisible) {
+      lastGrokVisible = usingGrok;
+      if (!usingGrok) {
+        // Grok終了直後に反映
         updateOverlay();
       }
     }
@@ -65,6 +110,22 @@ function setupComposerObserver() {
   document.addEventListener('visibilitychange', updateOverlay);
   window.addEventListener('focus', updateOverlay);
   window.addEventListener('blur', updateOverlay);
+  
+  // URL変更を監視（Grokへのナビゲーションを検出）
+  window.addEventListener('popstate', updateOverlay);
+  // pushState/replaceStateのオーバーライドでURL変更を検出
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+  
+  history.pushState = function() {
+    originalPushState.apply(history, arguments);
+    setTimeout(updateOverlay, 0);
+  };
+  
+  history.replaceState = function() {
+    originalReplaceState.apply(history, arguments);
+    setTimeout(updateOverlay, 0);
+  };
 }
 
 function createOverlay() {
@@ -406,6 +467,7 @@ function updateOverlay() {
     const now = Date.now();
     const isBlocked = now > unblockUntil;
     const composing = isComposerOpen();
+    const usingGrok = isGrokOpen();
     const active = isActivePage();
     
     // デバッグログ
@@ -415,6 +477,8 @@ function updateOverlay() {
       isBlocked,
       lastBlockState,
       lastUnblockUntil,
+      composing,
+      usingGrok,
       timeDiff: unblockUntil - now
     });
     
@@ -425,15 +489,15 @@ function updateOverlay() {
       lastUnblockUntil === unblockUntil;  // 同じ解除セッション内での時間切れ
 
     if (isBlocked) {
-      if (composing) {
-        // 投稿中はオーバーレイもリダイレクトも抑止
+      if (composing || usingGrok) {
+        // 投稿中またはGrok使用中はオーバーレイもリダイレクトも抑止
         hideOverlay();
         if (isTimeExpired) {
-          // 投稿完了後に即時発火させる
+          // 投稿/Grok完了後に即時発火させる
           pendingRedirect = true;
         }
       } else {
-        // 投稿していない場合は常にオーバーレイを表示。
+        // 投稿もGrokも使用していない場合は常にオーバーレイを表示。
         // リダイレクトはアクティブタブのときのみ発火させる。
         showOverlay();
         if (active && (isTimeExpired || pendingRedirect)) {
@@ -475,7 +539,7 @@ function requestRedirect() {
 }
 
 updateOverlay();
-setupComposerObserver();
+setupActivityObserver();
 setInterval(updateOverlay, CHECK_INTERVAL_MS);
 
 chrome.runtime.onMessage.addListener((message) => {
