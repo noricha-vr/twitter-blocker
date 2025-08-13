@@ -52,10 +52,26 @@ Uses Chrome Storage Sync API for:
 
 ## Commands
 
+### TypeScript Development
+```bash
+# Install dependencies
+npm install
+
+# Build for production
+npm run build
+
+# Development mode with watch
+npm run dev
+
+# Clean build artifacts
+npm run clean
+```
+
 ### Building and Packaging
 ```bash
-# Create deployment package (excludes git files, store assets, knowledge folder)
-zip -r twitter-blocker.zip . -x "*.git*" -x "store-assets/*" -x "twitter-blocker.zip" -x "*.DS_Store" -x "knowledge/*" -x "icon/twitter-blocker.png" -x "icon/icon.png"
+# Build TypeScript and create deployment package
+npm run build
+zip -r twitter-blocker.zip dist manifest.json icon -x "*.DS_Store"
 ```
 
 ### Testing

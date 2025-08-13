@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Twitter Blocker</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <div class="header">
+      <h1>Twitter Blocker</h1>
+      <div class="status">🔒 現在ブロック中</div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title">一時解除</h2>
+      
+      <div class="quick-actions">
+        <button class="quick-button" data-minutes="5">5分</button>
+        <button class="quick-button" data-minutes="10">10分</button>
+        <button class="quick-button" data-minutes="15">15分</button>
+        <button class="quick-button" data-minutes="30">30分</button>
+      </div>
+      
+      <div class="duration-grid">
+        <div class="time-input-container">
+          <div class="time-input-wrapper">
+            <input type="number" id="minuteInput" min="1" max="120" value="5" aria-label="解除する分数" />
+            <span class="time-unit">分</span>
+          </div>
+        </div>
+        <button id="saveButton" class="primary-button" aria-label="指定時間で解除">
+          解除
+        </button>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2 class="section-title">リダイレクト設定</h2>
+      
+      <div style="margin-bottom: 12px;">
+        <label class="redirect-label">
+          ブロック時に開くURL（オプション）
+        </label>
+        <input 
+          type="url" 
+          id="redirectUrlInput" 
+          placeholder="https://example.com"
+        />
+      </div>
+      
+      <button id="saveUrlButton">
+        URLを保存
+      </button>
+      
+      <div id="urlStatus">
+        ✓ 保存しました
+      </div>
+    </div>
+    
+    <script src="storageManager.js"></script>
+    <script src="styleInjector.js"></script>
+    <script>
+      // CSS変数を注入してからpopup.jsを読み込む
+      if (typeof injectCSSVariables === 'function') {
+        injectCSSVariables();
+      }
+    </script>
+    <script src="popup.js"></script>
+  </body>
+</html> 

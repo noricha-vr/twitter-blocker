@@ -9,7 +9,7 @@
     "downloads"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "dist/background.js"
   },
   "host_permissions": [
     "*://x.com/*",
@@ -22,12 +22,19 @@
         "*://twitter.com/*"
       ],
       "js": [
-        "contentScript.js"
+        "dist/storageManager.js",
+        "dist/contentScript.js"
       ]
     }
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["dist/constants.js", "dist/styleInjector.js", "dist/popup.css", "dist/storageManager.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "dist/popup.html",
     "default_icon": {
       "16": "icon/16.png",
       "24": "icon/24.png",

@@ -1,20 +1,38 @@
-// ===== Constants =====
-const OVERLAY_ID = 'block-overlay';
-const CHECK_INTERVAL_MS = 10 * 1000;
-const STORAGE_KEYS = {
-  unblockUntil: 'unblockUntil',
-  usageHistory: 'usageHistory',
-};
+import { COLORS, SIZES, TIMINGS, TEXT, SELECTORS, FONTS, ANIMATIONS, CHART_CONFIG, CSS_UTILS } from './constants';
+import { StorageManager } from './storageManager';
+
+// ===== TypeScript型定義 =====
+interface UsageData {
+  days: DayData[];
+  totalMinutes: number;
+  max: number;
+}
+
+interface DayData {
+  date: string;
+  minutes: number;
+  dayOfWeek: number;
+}
+
+interface StatData {
+  label: string;
+  value: string;
+  color: string;
+}
 
 // ===== Mutable state =====
-let overlay;
-let lastBlockState = undefined;  // 前回のブロック状態（undefined: 初回, true: ブロック中, false: 解除中）
+let overlay: HTMLElement | null = null;
+let lastBlockState: boolean | undefined = undefined;  // 前回のブロック状態（undefined: 初回, true: ブロック中, false: 解除中）
 let lastUnblockUntil = 0;        // 前回チェック時のunblockUntil値
 let pendingRedirect = false;     // 投稿中に抑止したリダイレクトを後で実行するためのフラグ
 let lastComposerVisible = false; // 直近の投稿画面表示状態
 let lastGrokVisible = false;     // 直近のGrok画面表示状態
 
-function isActivePage() {
+// ===== Constants =====
+const OVERLAY_ID = SELECTORS.OVERLAY_ID;
+const CHECK_INTERVAL_MS = TIMINGS.CHECK_INTERVAL_MS;
+
+function isActivePage(): boolean {
   try {
     // 【修正4】アクティブページ判定をより厳密に
     // document.visibilityState === 'visible': タブがアクティブ
@@ -33,7 +51,7 @@ function isActivePage() {
   }
 }
 
-function isElementVisible(element) {
+function isElementVisible(element: Element | null): boolean {
   if (!element) return false;
   const rect = element.getBoundingClientRect();
   if (!rect || rect.width === 0 || rect.height === 0) return false;
@@ -43,7 +61,7 @@ function isElementVisible(element) {
   return true;
 }
 
-function isComposerOpen() {
+function isComposerOpen(): boolean {
   // X(Twitter)の投稿モーダルが開いているかのみを厳密に判定（インラインは無視）
   try {
     const modals = Array.from(document.querySelectorAll('div[role="dialog"][aria-modal="true"]'));
@@ -58,7 +76,7 @@ function isComposerOpen() {
   }
 }
 
-function isGrokOpen() {
+function isGrokOpen(): boolean {
   // Grok画面が開いているかを判定
   try {
     // URLベースの検出
@@ -72,7 +90,8 @@ function isGrokOpen() {
       '[aria-label*="Grok"], [data-testid*="grok"], .grok-chat, #grok-container'
     );
     
-    for (const element of grokElements) {
+    for (let i = 0; i < grokElements.length; i++) {
+      const element = grokElements[i];
       if (isElementVisible(element)) {
         return true;
       }
@@ -90,7 +109,7 @@ function isGrokOpen() {
   }
 }
 
-function setupActivityObserver() {
+function setupActivityObserver(): void {
   // 投稿画面とGrok画面の開閉を監視して、閉じたら即座に反映
   const observer = new MutationObserver(() => {
     const composing = isComposerOpen();
@@ -127,13 +146,13 @@ function setupActivityObserver() {
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
   
-  history.pushState = function() {
-    originalPushState.apply(history, arguments);
+  history.pushState = function(this: History, ...args: Parameters<typeof originalPushState>) {
+    originalPushState.apply(history, args);
     setTimeout(updateOverlay, 0);
   };
   
-  history.replaceState = function() {
-    originalReplaceState.apply(history, arguments);
+  history.replaceState = function(this: History, ...args: Parameters<typeof originalReplaceState>) {
+    originalReplaceState.apply(history, args);
     setTimeout(updateOverlay, 0);
   };
 }
@@ -141,27 +160,27 @@ function setupActivityObserver() {
 /**
  * オーバーレイのCSSスタイル定義を作成・適用する
  */
-function createOverlayStyles() {
+function createOverlayStyles(): void {
   const style = document.createElement('style');
   style.textContent = `
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+    @keyframes ${ANIMATIONS.FADE_IN.name} {
+      from { opacity: ${ANIMATIONS.FADE_IN.keyframes.from.opacity}; }
+      to { opacity: ${ANIMATIONS.FADE_IN.keyframes.to.opacity}; }
     }
-    @keyframes slideUp {
+    @keyframes ${ANIMATIONS.SLIDE_UP.name} {
       from { 
-        opacity: 0;
-        transform: translateY(20px);
+        opacity: ${ANIMATIONS.SLIDE_UP.keyframes.from.opacity};
+        transform: ${ANIMATIONS.SLIDE_UP.keyframes.from.transform};
       }
       to {
-        opacity: 1;
-        transform: translateY(0);
+        opacity: ${ANIMATIONS.SLIDE_UP.keyframes.to.opacity};
+        transform: ${ANIMATIONS.SLIDE_UP.keyframes.to.transform};
       }
     }
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-      100% { transform: scale(1); }
+    @keyframes ${ANIMATIONS.PULSE.name} {
+      0% { transform: ${ANIMATIONS.PULSE.keyframes['0%'].transform}; }
+      50% { transform: ${ANIMATIONS.PULSE.keyframes['50%'].transform}; }
+      100% { transform: ${ANIMATIONS.PULSE.keyframes['100%'].transform}; }
     }
   `;
   document.head.appendChild(style);
@@ -169,49 +188,48 @@ function createOverlayStyles() {
 
 /**
  * メインカード要素（メッセージと指示部分）を作成する
- * @returns {HTMLElement} 作成されたカード要素
  */
-function createMainCard() {
+function createMainCard(): HTMLElement {
   const card = document.createElement('div');
   card.style.cssText = `
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
-    border-radius: 24px;
-    padding: 48px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    background: ${COLORS.BACKGROUND_CARD};
+    backdrop-filter: blur(${SIZES.SPACE_SM});
+    border-radius: ${SIZES.RADIUS_XL};
+    padding: ${SIZES.SPACE_GIANT};
+    box-shadow: ${SIZES.SHADOW_LG};
     text-align: center;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: ${FONTS.SYSTEM};
   `;
 
   // 主要メッセージ（認知的に最も重要）
   const mainMessage = document.createElement('h1');
   mainMessage.style.cssText = `
-    margin: 0 0 16px;
-    font-size: 32px;
+    margin: 0 0 ${SIZES.SPACE_LG};
+    font-size: ${SIZES.FONT_MASSIVE};
     font-weight: 700;
-    color: #2c3e50;
-    line-height: 1.2;
+    color: ${COLORS.TEXT_DARK};
+    line-height: ${SIZES.LINE_HEIGHT_TIGHT};
   `;
-  mainMessage.textContent = 'Twitter はブロック中です';
+  mainMessage.textContent = TEXT.MAIN_TITLE;
 
   // 副次メッセージ
   const subMessage = document.createElement('p');
   subMessage.style.cssText = `
-    margin: 0 0 32px;
-    font-size: 18px;
-    color: #7f8c8d;
-    line-height: 1.5;
+    margin: 0 0 ${SIZES.SPACE_MASSIVE};
+    font-size: ${SIZES.FONT_XL};
+    color: ${COLORS.TEXT_LIGHT};
+    line-height: ${SIZES.LINE_HEIGHT_NORMAL};
   `;
-  subMessage.innerHTML = '集中力を保つため、現在アクセスが制限されています';
+  subMessage.innerHTML = TEXT.SUB_MESSAGE;
 
   // 解除方法（1行の説明）
   const instruction = document.createElement('p');
   instruction.style.cssText = `
-    margin: -16px 0 28px; /* 直前の説明とやや近づける */
-    font-size: 14px;
-    color: #95a5a6;
+    margin: -${SIZES.SPACE_LG} 0 ${SIZES.SPACE_HUGE}; /* 直前の説明とやや近づける */
+    font-size: ${SIZES.FONT_MD};
+    color: ${COLORS.TEXT_MUTED};
   `;
-  instruction.textContent = '一時的に解除するには、拡張機能アイコンをクリックして時間を設定してください。';
+  instruction.textContent = TEXT.INSTRUCTION;
 
   card.appendChild(mainMessage);
   card.appendChild(subMessage);
@@ -222,32 +240,31 @@ function createMainCard() {
 
 /**
  * 使用統計セクション（タイトルとチャートコンテナ）を作成する
- * @returns {HTMLElement} 作成された使用統計セクション
  */
-function createUsageSection() {
+function createUsageSection(): HTMLElement {
   const usageSection = document.createElement('div');
   usageSection.style.cssText = `
-    margin-top: 32px;
+    margin-top: ${SIZES.SPACE_MASSIVE};
   `;
 
   const usageTitle = document.createElement('h3');
   usageTitle.style.cssText = `
-    margin: 0 0 16px;
-    font-size: 14px;
+    margin: 0 0 ${SIZES.SPACE_LG};
+    font-size: ${SIZES.FONT_MD};
     font-weight: 600;
-    color: #7f8c8d;
+    color: ${COLORS.TEXT_LIGHT};
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: ${SIZES.LETTER_SPACING_WIDER};
   `;
-  usageTitle.textContent = '直近30日間の使用時間';
+  usageTitle.textContent = TEXT.CHART_TITLE;
 
   const chartContainer = document.createElement('div');
-  chartContainer.id = 'usage-chart';
+  chartContainer.id = SELECTORS.USAGE_CHART_ID;
   chartContainer.style.cssText = `
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    background: ${COLORS.BACKGROUND_WHITE};
+    border-radius: ${SIZES.RADIUS_LG};
+    padding: ${SIZES.SPACE_XL};
+    box-shadow: ${SIZES.SHADOW_MD};
   `;
 
   usageSection.appendChild(usageTitle);
@@ -258,15 +275,15 @@ function createUsageSection() {
 
 /**
  * オーバーレイ要素をDOMに追加する
- * @param {HTMLElement} card - メインカード要素
- * @param {HTMLElement} usageSection - 使用統計セクション
  */
-function appendOverlayToDOM(card, usageSection) {
+function appendOverlayToDOM(card: HTMLElement, usageSection: HTMLElement): void {
+  if (!overlay) return;
+
   const container = document.createElement('div');
   container.style.cssText = `
-    max-width: 680px; /* 説明文が1行に収まるよう少し拡張 */
-    width: 90%;
-    animation: slideUp 0.5s ease forwards;
+    max-width: ${SIZES.WIDTH_OVERLAY_MAX}; /* 説明文が1行に収まるよう少し拡張 */
+    width: ${SIZES.WIDTH_OVERLAY_PERCENT};
+    animation: ${ANIMATIONS.SLIDE_UP.name} ${TIMINGS.ANIMATION_SLOW} ${TIMINGS.EASE_FORWARDS};
   `;
 
   card.appendChild(usageSection);
@@ -280,7 +297,7 @@ function appendOverlayToDOM(card, usageSection) {
  * オーバーレイ全体を作成・表示する
  * Phase 1でリファクタリング済み：4つの責務に分解
  */
-function createOverlay() {
+function createOverlay(): void {
   // 既存のオーバーレイが存在するかチェック（DOM内の要素も含む）
   if (overlay || document.getElementById(OVERLAY_ID)) {
     return;
@@ -293,15 +310,15 @@ function createOverlay() {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100vh;
-    background: #2f2f2f; /* 背景はカードより暗い灰色 */
-    z-index: 999999;
+    width: ${SIZES.WIDTH_FULL};
+    height: ${SIZES.HEIGHT_VIEWPORT};
+    background: ${COLORS.BACKGROUND_OVERLAY}; /* 背景はカードより暗い灰色 */
+    z-index: ${SIZES.Z_INDEX_OVERLAY};
     display: none; /* 初期状態では非表示 */
     justify-content: center;
     align-items: center;
     opacity: 0;
-    animation: fadeIn 0.3s ease forwards;
+    animation: ${ANIMATIONS.FADE_IN.name} ${TIMINGS.ANIMATION_NORMAL} ${TIMINGS.EASE_FORWARDS};
   `;
 
   // 2. スタイル定義を作成・適用
@@ -319,13 +336,11 @@ function createOverlay() {
 
 /**
  * 30日間の使用データを生成・集計する
- * @param {Object} usageHistory - 使用履歴のオブジェクト
- * @returns {Object} { days: Array, totalMinutes: number, max: number }
  */
-function generateUsageData(usageHistory) {
+function generateUsageData(usageHistory: Record<string, number> | null): UsageData {
   const history = usageHistory || {};
   const today = new Date();
-  const days = [];
+  const days: DayData[] = [];
   let totalMinutes = 0;
   
   for (let i = 29; i >= 0; i--) {
@@ -337,41 +352,38 @@ function generateUsageData(usageHistory) {
     totalMinutes += minutes;
   }
 
-  const max = Math.max(...days.map((d) => d.minutes), 30); // 最小値を30分に設定
+  const max = Math.max(...days.map((d) => d.minutes), CHART_CONFIG.DEFAULT_MAX_MINUTES); // 最小値を30分に設定
   
   return { days, totalMinutes, max };
 }
 
 /**
  * 統計情報セクション（合計・平均・今日）を作成する
- * @param {number} totalMinutes - 合計使用時間
- * @param {Object} history - 使用履歴
- * @returns {HTMLElement} 作成された統計情報要素
  */
-function createStatsSection(totalMinutes, history) {
+function createStatsSection(totalMinutes: number, history: Record<string, number>): HTMLElement {
   const stats = document.createElement('div');
   stats.style.cssText = `
     display: flex;
     justify-content: space-around;
-    margin-bottom: 20px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #ecf0f1;
+    margin-bottom: ${SIZES.SPACE_XL};
+    padding-bottom: ${SIZES.SPACE_XL};
+    border-bottom: 1px solid ${COLORS.BORDER_LIGHT};
   `;
 
-  const avgMinutes = Math.round(totalMinutes / 30);
+  const avgMinutes = Math.round(totalMinutes / CHART_CONFIG.DAYS_TO_SHOW);
   const today = new Date();
-  const statsData = [
-    { label: '合計', value: `${totalMinutes}分`, color: '#3498db' },
-    { label: '1日平均', value: `${avgMinutes}分`, color: '#2ecc71' },
-    { label: '今日', value: `${history[today.toLocaleDateString('sv-SE')] || 0}分`, color: '#e74c3c' }
+  const statsData: StatData[] = [
+    { label: TEXT.CHART_TOTAL, value: `${totalMinutes}${TEXT.UNIT_MINUTES}`, color: COLORS.INFO_BLUE },
+    { label: TEXT.CHART_AVERAGE, value: `${avgMinutes}${TEXT.UNIT_MINUTES}`, color: COLORS.SUCCESS_GREEN_LIGHT },
+    { label: TEXT.CHART_TODAY, value: `${history[today.toLocaleDateString('sv-SE')] || 0}${TEXT.UNIT_MINUTES}`, color: COLORS.ERROR_RED }
   ];
 
   statsData.forEach(stat => {
     const statDiv = document.createElement('div');
     statDiv.style.cssText = 'text-align: center;';
     statDiv.innerHTML = `
-      <div style="font-size: 24px; font-weight: 700; color: ${stat.color};">${stat.value}</div>
-      <div style="font-size: 12px; color: #95a5a6; margin-top: 4px;">${stat.label}</div>
+      <div style="font-size: ${SIZES.FONT_HUGE}; font-weight: 700; color: ${stat.color};">${stat.value}</div>
+      <div style="font-size: ${SIZES.FONT_BASE}; color: ${COLORS.TEXT_MUTED}; margin-top: ${SIZES.SPACE_XS};">${stat.label}</div>
     `;
     stats.appendChild(statDiv);
   });
@@ -381,11 +393,8 @@ function createStatsSection(totalMinutes, history) {
 
 /**
  * バーチャートとY軸を作成する
- * @param {Array} days - 日別データの配列
- * @param {number} max - 最大値
- * @returns {HTMLElement} 作成されたチャートラッパー要素
  */
-function createChart(days, max) {
+function createChart(days: DayData[], max: number): HTMLElement {
   const chartWrapper = document.createElement('div');
   chartWrapper.style.cssText = 'position: relative;';
 
@@ -393,20 +402,20 @@ function createChart(days, max) {
   const yAxisContainer = document.createElement('div');
   yAxisContainer.style.cssText = `
     position: absolute;
-    left: -40px;
+    left: ${SIZES.CHART_Y_AXIS_OFFSET};
     top: 0;
-    height: 120px;
+    height: ${SIZES.HEIGHT_CHART};
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    font-size: 11px;
-    color: #95a5a6;
+    font-size: ${SIZES.FONT_SM};
+    color: ${COLORS.TEXT_MUTED};
   `;
 
-  for (let i = 3; i >= 0; i--) {
+  for (let i = CHART_CONFIG.Y_AXIS_TICKS - 1; i >= 0; i--) {
     const tick = document.createElement('div');
     tick.style.cssText = 'text-align: right;';
-    tick.textContent = `${Math.round((max / 3) * i)}`;
+    tick.textContent = `${Math.round((max / (CHART_CONFIG.Y_AXIS_TICKS - 1)) * i)}`;
     yAxisContainer.appendChild(tick);
   }
 
@@ -415,13 +424,14 @@ function createChart(days, max) {
   chart.style.cssText = `
     display: flex;
     align-items: flex-end;
-    height: 120px;
-    gap: 3px;
-    padding: 0 5px;
-    background: linear-gradient(to bottom, 
-      rgba(52, 152, 219, 0.05) 0%, 
-      rgba(52, 152, 219, 0) 100%);
-    border-radius: 8px;
+    height: ${SIZES.HEIGHT_CHART};
+    gap: ${SIZES.CHART_BAR_GAP};
+    padding: ${SIZES.CHART_PADDING};
+    background: ${CSS_UTILS.linearGradient('to bottom', [
+      COLORS.CHART_BACKGROUND + ' 0%', 
+      COLORS.TRANSPARENT + ' 100%'
+    ])};
+    border-radius: ${SIZES.RADIUS_MD};
   `;
 
   days.forEach((d, index) => {
@@ -437,21 +447,21 @@ function createChart(days, max) {
     `;
 
     const bar = document.createElement('div');
-    const height = d.minutes > 0 ? Math.max((d.minutes / max) * 100, 3) : 0;
+    const height = d.minutes > 0 ? Math.max((d.minutes / max) * 100, CHART_CONFIG.BAR_MIN_HEIGHT_PERCENT) : 0;
     const isToday = index === days.length - 1;
     const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
     
     bar.style.cssText = `
-      width: 100%;
+      width: ${SIZES.WIDTH_FULL};
       height: ${height}%;
       background: ${isToday ? 
-        'linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)' : 
+        CSS_UTILS.linearGradient('135deg', [COLORS.CHART_TODAY + ' 0%', COLORS.CHART_TODAY_DARK + ' 100%']) : 
         isWeekend ? 
-        'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)' :
-        'linear-gradient(135deg, #3498db 0%, #2980b9 100%)'
+        CSS_UTILS.linearGradient('135deg', [COLORS.CHART_WEEKEND + ' 0%', COLORS.CHART_WEEKEND_DARK + ' 100%']) :
+        CSS_UTILS.linearGradient('135deg', [COLORS.CHART_WEEKDAY + ' 0%', COLORS.CHART_WEEKDAY_DARK + ' 100%'])
       };
-      border-radius: 4px 4px 0 0;
-      transition: all 0.3s ease;
+      border-radius: ${SIZES.RADIUS_XS} ${SIZES.RADIUS_XS} 0 0;
+      transition: all ${TIMINGS.ANIMATION_NORMAL} ${TIMINGS.EASE_DEFAULT};
       position: relative;
     `;
 
@@ -459,27 +469,26 @@ function createChart(days, max) {
     const tooltip = document.createElement('div');
     tooltip.style.cssText = `
       position: absolute;
-      bottom: 100%;
+      bottom: ${SIZES.WIDTH_FULL};
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(44, 62, 80, 0.95);
-      color: white;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 12px;
+      background: ${COLORS.TOOLTIP_BACKGROUND};
+      color: ${COLORS.TOOLTIP_TEXT};
+      padding: ${SIZES.SPACE_SM} ${SIZES.SPACE_MD};
+      border-radius: ${SIZES.RADIUS_SM};
+      font-size: ${SIZES.FONT_BASE};
       white-space: nowrap;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.2s ease;
-      margin-bottom: 8px;
-      z-index: 10;
+      transition: opacity ${TIMINGS.TOOLTIP_FADE_MS}ms ${TIMINGS.EASE_DEFAULT};
+      margin-bottom: ${SIZES.SPACE_SM};
+      z-index: ${SIZES.Z_INDEX_TOOLTIP};
     `;
     
     const [y, m, day] = d.date.split('-').map(Number);
-    const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
     tooltip.innerHTML = `
-      <div style="font-weight: 600;">${m}月${day}日 (${dayNames[d.dayOfWeek]})</div>
-      <div style="margin-top: 4px;">${d.minutes}分</div>
+      <div style="font-weight: 600;">${m}月${day}日 (${TEXT.DAY_NAMES[d.dayOfWeek]})</div>
+      <div style="margin-top: ${SIZES.SPACE_XS};">${d.minutes}${TEXT.UNIT_MINUTES}</div>
     `;
 
     barContainer.addEventListener('mouseenter', () => {
@@ -507,17 +516,15 @@ function createChart(days, max) {
 
 /**
  * X軸（日付ラベル）を作成する
- * @param {Array} days - 日別データの配列
- * @returns {HTMLElement} 作成されたX軸要素
  */
-function createXAxis(days) {
+function createXAxis(days: DayData[]): HTMLElement {
   const xAxis = document.createElement('div');
   xAxis.style.cssText = `
     display: flex;
-    margin-top: 8px;
-    padding: 0 5px;
-    font-size: 10px;
-    color: #95a5a6;
+    margin-top: ${SIZES.SPACE_SM};
+    padding: ${SIZES.CHART_PADDING};
+    font-size: ${SIZES.FONT_XS};
+    color: ${COLORS.TEXT_MUTED};
   `;
   
   // 週ごとに日付を表示
@@ -541,12 +548,12 @@ function createXAxis(days) {
  * 使用履歴チャートを更新・表示する
  * Phase 2でリファクタリング済み：4つの責務に分解
  */
-function updateUsageChart() {
+function updateUsageChart(): void {
   if (!overlay) return;
-  const container = overlay.querySelector('#usage-chart');
+  const container = overlay.querySelector(`#${SELECTORS.USAGE_CHART_ID}`) as HTMLElement;
   if (!container) return;
   
-  chrome.storage.sync.get([STORAGE_KEYS.usageHistory], ({ usageHistory }) => {
+  StorageManager.getUsageHistory().then((usageHistory: Record<string, number> | null) => {
     // 1. データ生成・集計
     const { days, totalMinutes, max } = generateUsageData(usageHistory);
     
@@ -563,12 +570,13 @@ function updateUsageChart() {
     // 4. X軸作成
     const xAxis = createXAxis(days);
     container.appendChild(xAxis);
+  }).catch((error: Error) => {
+    console.error('Failed to load usage history:', error);
   });
 }
 
-function updateOverlay() {
-  chrome.storage.sync.get([STORAGE_KEYS.unblockUntil], (result) => {
-    const unblockUntil = result[STORAGE_KEYS.unblockUntil] || 0;
+function updateOverlay(): void {
+  StorageManager.getUnblockUntil().then((unblockUntil: number) => {
     const now = Date.now();
     const isBlocked = now > unblockUntil;
     const composing = isComposerOpen();
@@ -630,10 +638,12 @@ function updateOverlay() {
     // 状態を更新
     lastBlockState = isBlocked;
     lastUnblockUntil = unblockUntil;
+  }).catch((error: Error) => {
+    console.error('Failed to get unblock until time:', error);
   });
 }
 
-function showOverlay() {
+function showOverlay(): void {
   // グローバル変数が未定義の場合はDOMから取得を試みる
   if (!overlay) {
     overlay = document.getElementById(OVERLAY_ID);
@@ -643,7 +653,7 @@ function showOverlay() {
   }
 }
 
-function hideOverlay() {
+function hideOverlay(): void {
   // グローバル変数が未定義の場合はDOMから取得を試みる
   if (!overlay) {
     overlay = document.getElementById(OVERLAY_ID);
@@ -653,8 +663,8 @@ function hideOverlay() {
   }
 }
 
-function requestRedirect() {
-  chrome.runtime.sendMessage({ action: 'openRedirectURL' }, (response) => {
+function requestRedirect(): void {
+  chrome.runtime.sendMessage({ action: 'openRedirectURL' }, (response?: any) => {
     if (chrome.runtime.lastError) {
       console.error('Error sending message:', chrome.runtime.lastError);
     } else if (response) {
@@ -665,20 +675,17 @@ function requestRedirect() {
 }
 
 // 【修正3】初期化処理：ストレージ読み込み完了後に実行するよう改善
-function initialize() {
+function initialize(): void {
   console.log('[Twitter Blocker] Initializing content script...');
   
   // まずストレージが利用可能かを確認してから初期化を進める
-  chrome.storage.sync.get([STORAGE_KEYS.unblockUntil], (result) => {
-    if (chrome.runtime.lastError) {
-      console.error('[Twitter Blocker] Storage access error during initialization:', chrome.runtime.lastError);
-      return;
-    }
-    
+  StorageManager.getUnblockUntil().then(() => {
     console.log('[Twitter Blocker] Storage initialized, setting up observer and overlay...');
     setupActivityObserver();
     updateOverlay();
     setInterval(updateOverlay, CHECK_INTERVAL_MS);
+  }).catch((error: Error) => {
+    console.error('[Twitter Blocker] Storage access error during initialization:', error);
   });
 }
 
@@ -690,7 +697,7 @@ if (document.readyState === 'loading') {
   setTimeout(initialize, 0);
 }
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message: { action: string }) => {
   if (message.action === 'updateOverlay') {
     updateOverlay();
   }

@@ -1,0 +1,214 @@
+/* 
+ * Twitter Blocker Chrome Extension - Popup Styles
+ * constants.jsから値を動的に注入されることを前提とした設計
+ */
+
+body {
+  font-family: var(--font-system);
+  margin: 0;
+  padding: var(--space-xl);
+  width: var(--width-popup);
+  background: var(--background-primary);
+}
+
+/* ヘッダー */
+.header {
+  text-align: center;
+  margin-bottom: var(--space-xxl);
+}
+
+.header h1 {
+  font-size: var(--font-xxl);
+  margin: 0 0 var(--space-xs) 0;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.status {
+  font-size: var(--font-md);
+  color: var(--error-red);
+  font-weight: 500;
+}
+
+/* メインセクション */
+.section {
+  background: var(--background-white);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  margin-bottom: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.section-title {
+  font-size: var(--font-md);
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-md) 0;
+  text-transform: uppercase;
+  letter-spacing: var(--letter-spacing-wide);
+}
+
+/* 時間入力エリア */
+.duration-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: var(--space-md);
+  align-items: stretch;
+  margin-bottom: var(--space-lg);
+}
+
+.time-input-container {
+  display: block;
+  min-width: 0; /* allow shrink inside grid */
+  position: relative;
+  z-index: var(--z-index-default);
+}
+
+.time-input-wrapper {
+  position: relative;
+}
+
+#minuteInput {
+  width: var(--width-full);
+  box-sizing: border-box;
+  padding: var(--space-md) var(--space-lg);
+  font-size: var(--font-huge);
+  font-weight: 600;
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition: var(--transition-all);
+  padding-right: var(--input-right-padding); /* 単位分の余白 */
+}
+
+#minuteInput:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.time-unit {
+  position: absolute;
+  right: var(--space-md);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--font-lg);
+  color: var(--text-secondary);
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* ボタン */
+.primary-button {
+  width: var(--width-full);
+  padding: var(--input-padding-lg);
+  font-size: var(--font-lg);
+  font-weight: 600;
+  color: var(--text-white);
+  background: var(--primary-blue);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+/* 2カラム時はボタンを入力欄の高さに合わせる */
+.duration-grid .primary-button {
+  height: var(--height-full);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: var(--z-index-input); /* ensure above input borders */
+}
+
+.primary-button:hover {
+  background: var(--primary-blue-hover);
+  transform: translateY(-1px);
+}
+
+.primary-button:active {
+  transform: translateY(0);
+}
+
+/* クイックアクセスボタン */
+.quick-actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+}
+
+.quick-button {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  font-size: var(--font-md);
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--background-input);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+.quick-button:hover {
+  background: var(--background-input-hover);
+  color: var(--text-primary);
+}
+
+.quick-button.active {
+  color: var(--primary-blue);
+  border-color: var(--primary-blue);
+  background: var(--primary-blue-light);
+}
+
+/* リダイレクト設定 */
+.redirect-label {
+  font-size: var(--font-md);
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: var(--space-sm);
+}
+
+#redirectUrlInput {
+  width: var(--width-full);
+  padding: var(--input-padding-sm);
+  font-size: var(--font-md);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+  transition: var(--transition-all);
+}
+
+#redirectUrlInput:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+#saveUrlButton {
+  width: var(--width-full);
+  padding: var(--input-padding-sm);
+  font-size: var(--font-md);
+  font-weight: 500;
+  color: var(--primary-blue);
+  background: var(--background-white);
+  border: 2px solid var(--primary-blue);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: var(--transition-all);
+}
+
+#saveUrlButton:hover {
+  background: var(--primary-blue-light);
+}
+
+#urlStatus {
+  margin-top: var(--space-sm);
+  font-size: var(--font-base);
+  color: var(--success-green);
+  display: none;
+}
+
+/* セクション間のスペース調整 */
+.section + .section {
+  margin-top: var(--space-lg);
+}
