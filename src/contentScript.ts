@@ -70,34 +70,21 @@ function isComposerOpen(): boolean {
 }
 
 function isGrokOpen(): boolean {
-  // Grok画面が開いているかを判定
+  // Grok画面が開いているかを判定（URLベースの検出のみ）
+  // 注意: DOM要素ベースの検出は誤検出が多いため削除
+  // （ナビゲーションメニューの「Grok」要素などを誤検出していた）
   try {
-    // URLベースの検出
-    if (window.location.pathname.includes('/i/grok')) {
-      return true;
+    const pathname = window.location.pathname;
+    const isGrok = pathname.startsWith('/i/grok');
+
+    // デバッグログ（Grok検出時のみ出力）
+    if (isGrok) {
+      console.log('[Twitter Blocker] Grok detected via URL:', pathname);
     }
-    
-    // DOM要素ベースの検出（Grokチャット画面の特徴的な要素）
-    // Grok固有のモーダルやチャット要素を探す
-    const grokElements = document.querySelectorAll(
-      '[aria-label*="Grok"], [data-testid*="grok"], .grok-chat, #grok-container'
-    );
-    
-    for (let i = 0; i < grokElements.length; i++) {
-      const element = grokElements[i];
-      if (isElementVisible(element)) {
-        return true;
-      }
-    }
-    
-    // Grok会話画面の特徴的な要素パターンも検出
-    // 会話IDを含むURLパターン（例: /i/grok?conversation=xxxx）
-    if (window.location.pathname === '/i/grok' && window.location.search.includes('conversation=')) {
-      return true;
-    }
-    
-    return false;
-  } catch (_) {
+
+    return isGrok;
+  } catch (error) {
+    console.warn('[Twitter Blocker] Error in isGrokOpen:', error);
     return false;
   }
 }
@@ -128,10 +115,11 @@ function setupActivityObserver(): void {
   });
   observer.observe(document.documentElement, { subtree: true, childList: true, attributes: false });
 
-  // タブの可視状態やフォーカス変化に応じて即時反映
+  // タブの可視状態変化に応じて即時反映
+  // 注意: blurイベントは削除（ポップアップを開くとblurが発火し、
+  //       タイミング問題でオーバーレイが消える可能性があるため）
   document.addEventListener('visibilitychange', updateOverlay);
   window.addEventListener('focus', updateOverlay);
-  window.addEventListener('blur', updateOverlay);
   
   // URL変更を監視（Grokへのナビゲーションを検出）
   window.addEventListener('popstate', updateOverlay);
@@ -576,52 +564,66 @@ function updateOverlay(): void {
     const usingGrok = isGrokOpen();
     const active = isActivePage();
     
-    // デバッグログ（詳細表示）
-    console.log('[Twitter Blocker Debug]',
-      'now:', now,
-      'unblockUntil:', unblockUntil,
-      'isBlocked:', isBlocked,
-      'timeDiff(ms):', unblockUntil - now,
-      'active:', active,
-      'composing:', composing,
-      'usingGrok:', usingGrok
-    );
-    
     // 時間切れ検出：解除状態→ブロック状態への遷移を検出
-    const isTimeExpired = 
+    const isTimeExpired =
       lastBlockState === false &&      // 前回は解除されていた
       isBlocked &&                     // 今回はブロックされている
       lastUnblockUntil === unblockUntil;  // 同じ解除セッション内での時間切れ
 
+    // デバッグログ（詳細表示）
+    console.log('[Twitter Blocker Debug]', {
+      timestamp: new Date().toISOString(),
+      now,
+      unblockUntil,
+      isBlocked,
+      timeDiff: unblockUntil - now,
+      active,
+      composing,
+      usingGrok,
+      lastBlockState,
+      isTimeExpired,
+      pendingRedirect,
+      pathname: window.location.pathname
+    });
+
+    // 状態遷移のログ
+    if (lastBlockState !== undefined && lastBlockState !== isBlocked) {
+      console.log('[Twitter Blocker] State transition:', lastBlockState ? 'BLOCKED → UNBLOCKED' : 'UNBLOCKED → BLOCKED');
+    }
+
     if (isBlocked) {
-      // 【修正1】ブロック中でアクティブページかつ投稿/Grok中でない場合のみオーバーレイ表示
+      // ブロック中でアクティブページかつ投稿/Grok中でない場合のみオーバーレイ表示
       if (active && !composing && !usingGrok) {
-        // オーバーレイを作成してから表示
+        console.log('[Twitter Blocker] Action: showOverlay (blocked, active, not composing, not Grok)');
         createOverlay();
         showOverlay();
-        
+
         if (isTimeExpired || pendingRedirect) {
+          console.log('[Twitter Blocker] Action: requestRedirect (timeExpired:', isTimeExpired, 'pendingRedirect:', pendingRedirect, ')');
           pendingRedirect = false;
           // Background service worker にリダイレクトリクエストを送信
           requestRedirect();
         }
-        
+
         // チャート更新
         if (overlay) {
           updateUsageChart();
         }
       } else {
-        // 【修正2】非アクティブ、投稿中、Grok中はオーバーレイを非表示
+        // 非アクティブ、投稿中、Grok中はオーバーレイを非表示
+        const reason = !active ? 'inactive' : composing ? 'composing' : usingGrok ? 'using Grok' : 'unknown';
+        console.log('[Twitter Blocker] Action: hideOverlay (blocked but', reason, ')');
         hideOverlay();
         if (composing || usingGrok) {
           if (isTimeExpired) {
-            // 投稿/Grok完了後に即時発火させる
+            console.log('[Twitter Blocker] Setting pendingRedirect=true for later');
             pendingRedirect = true;
           }
         }
       }
     } else {
       // ブロック解除中はオーバーレイを隠す
+      console.log('[Twitter Blocker] Action: hideOverlay (unblocked)');
       hideOverlay();
       pendingRedirect = false;
     }

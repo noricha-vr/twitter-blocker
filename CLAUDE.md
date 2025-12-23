@@ -8,7 +8,8 @@ Twitter/X.comへのアクセスをブロックし、タイマーで一時解除�
 |------|-----|
 | 言語 | TypeScript |
 | ビルド | `npm run build` |
-| 開発モード | `npm run dev` |
+| 開発（watch） | `npm run dev` |
+| 開発（自動リロード） | `npm run dev:reload`（web-ext使用） |
 | パッケージ作成 | `zip -r twitter-blocker.zip dist manifest.json icon -x "*.DS_Store"` |
 | デプロイ先 | [Chrome Web Store](https://chrome.google.com/webstore/devconsole/) |
 | ストアアセット | `store-assets/` |
@@ -63,4 +64,3 @@ Twitter/X.comへのアクセスをブロックし、タイマーで一時解除�
 - Manifest V3: 永続バックグラウンドページなし、コンテンツスクリプトは分離コンテキスト
 - UIテキスト: 日本語のみ（i18n未対応）
 - 時間帯ブロック機能: UIのみ実装済み（ロジック未実装）
-- **更新時は必ずバージョンを1上げる**（ブラウザで変更反映を確認するため）
