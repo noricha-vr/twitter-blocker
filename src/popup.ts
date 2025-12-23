@@ -16,7 +16,34 @@ interface QuickButtonData {
   minutes: string;
 }
 
-// StorageManager を使用するため、ローカル定数は削除
+// ===== Helper Functions =====
+
+/**
+ * クイックボタンのアクティブ状態を更新する
+ */
+function updateQuickButtonActiveState(quickButtons: NodeListOf<HTMLButtonElement>, activeMinutes: string): void {
+  quickButtons.forEach((button: HTMLButtonElement) => {
+    if (button.dataset.minutes === activeMinutes) {
+      button.classList.add("active");
+    } else {
+      button.classList.remove("active");
+    }
+  });
+}
+
+/**
+ * 入力フィールドの値をセットしてクイックボタンを更新する
+ */
+function setMinutesAndUpdateButtons(
+  minuteInput: HTMLInputElement,
+  quickButtons: NodeListOf<HTMLButtonElement>,
+  minutes: string
+): void {
+  minuteInput.value = minutes;
+  updateQuickButtonActiveState(quickButtons, minutes);
+}
+
+// ===== Main Initialization =====
 
 document.addEventListener("DOMContentLoaded", () => {
   // CSS変数を注入
@@ -76,27 +103,14 @@ document.addEventListener("DOMContentLoaded", () => {
     button.addEventListener("click", () => {
       const minutesStr = button.dataset.minutes;
       if (!minutesStr || !state) return;
-      
-      const minutes = parseInt(minutesStr);
-      state.minuteInput.value = minutes.toString();
-      
-      // アクティブ状態の表示
-      state.quickButtons.forEach(b => b.classList.remove("active"));
-      button.classList.add("active");
+      setMinutesAndUpdateButtons(state.minuteInput, state.quickButtons, minutesStr);
     });
   });
 
   // 入力値が変更されたらクイックボタンのアクティブ状態を更新
   state.minuteInput.addEventListener("input", () => {
     if (!state) return;
-    const value = state.minuteInput.value;
-    state.quickButtons.forEach((button: HTMLButtonElement) => {
-      if (button.dataset.minutes === value) {
-        button.classList.add("active");
-      } else {
-        button.classList.remove("active");
-      }
-    });
+    updateQuickButtonActiveState(state.quickButtons, state.minuteInput.value);
   });
 
   // 解除ボタンの処理

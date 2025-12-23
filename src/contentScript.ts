@@ -20,13 +20,25 @@ interface StatData {
   color: string;
 }
 
-// ===== Mutable state =====
-let overlay: HTMLElement | null = null;
-let lastBlockState: boolean | undefined = undefined;  // 前回のブロック状態（undefined: 初回, true: ブロック中, false: 解除中）
-let lastUnblockUntil = 0;        // 前回チェック時のunblockUntil値
-let pendingRedirect = false;     // 投稿中に抑止したリダイレクトを後で実行するためのフラグ
-let lastComposerVisible = false; // 直近の投稿画面表示状態
-let lastGrokVisible = false;     // 直近のGrok画面表示状態
+// ===== Blocker State Interface =====
+interface BlockerState {
+  overlay: HTMLElement | null;
+  lastBlockState: boolean | undefined;
+  lastUnblockUntil: number;
+  pendingRedirect: boolean;
+  lastComposerVisible: boolean;
+  lastGrokVisible: boolean;
+}
+
+// ===== Mutable state (集約) =====
+const state: BlockerState = {
+  overlay: null,
+  lastBlockState: undefined,  // 前回のブロック状態（undefined: 初回, true: ブロック中, false: 解除中）
+  lastUnblockUntil: 0,        // 前回チェック時のunblockUntil値
+  pendingRedirect: false,     // 投稿中に抑止したリダイレクトを後で実行するためのフラグ
+  lastComposerVisible: false, // 直近の投稿画面表示状態
+  lastGrokVisible: false,     // 直近のGrok画面表示状態
+};
 
 // ===== Constants =====
 const OVERLAY_ID = SELECTORS.OVERLAY_ID;
@@ -94,19 +106,19 @@ function setupActivityObserver(): void {
   const observer = new MutationObserver(() => {
     const composing = isComposerOpen();
     const usingGrok = isGrokOpen();
-    
+
     // 投稿画面の状態変化を検出
-    if (composing !== lastComposerVisible) {
-      lastComposerVisible = composing;
+    if (composing !== state.lastComposerVisible) {
+      state.lastComposerVisible = composing;
       if (!composing) {
         // 投稿完了（モーダル閉鎖）直後に反映
         updateOverlay();
       }
     }
-    
+
     // Grok画面の状態変化を検出
-    if (usingGrok !== lastGrokVisible) {
-      lastGrokVisible = usingGrok;
+    if (usingGrok !== state.lastGrokVisible) {
+      state.lastGrokVisible = usingGrok;
       if (!usingGrok) {
         // Grok終了直後に反映
         updateOverlay();
@@ -142,14 +154,18 @@ function setupActivityObserver(): void {
  * オーバーレイのCSSスタイル定義を作成・適用する
  */
 function createOverlayStyles(): void {
+  // 既にスタイルが追加されている場合はスキップ
+  if (document.getElementById('twitter-blocker-styles')) return;
+
   const style = document.createElement('style');
+  style.id = 'twitter-blocker-styles';
   style.textContent = `
     @keyframes ${ANIMATIONS.FADE_IN.name} {
       from { opacity: ${ANIMATIONS.FADE_IN.keyframes.from.opacity}; }
       to { opacity: ${ANIMATIONS.FADE_IN.keyframes.to.opacity}; }
     }
     @keyframes ${ANIMATIONS.SLIDE_UP.name} {
-      from { 
+      from {
         opacity: ${ANIMATIONS.SLIDE_UP.keyframes.from.opacity};
         transform: ${ANIMATIONS.SLIDE_UP.keyframes.from.transform};
       }
@@ -258,7 +274,7 @@ function createUsageSection(): HTMLElement {
  * オーバーレイ要素をDOMに追加する
  */
 function appendOverlayToDOM(card: HTMLElement, usageSection: HTMLElement): void {
-  if (!overlay) return;
+  if (!state.overlay) return;
 
   const container = document.createElement('div');
   container.style.cssText = `
@@ -269,9 +285,9 @@ function appendOverlayToDOM(card: HTMLElement, usageSection: HTMLElement): void 
 
   card.appendChild(usageSection);
   container.appendChild(card);
-  overlay.appendChild(container);
-  
-  document.documentElement.appendChild(overlay);
+  state.overlay.appendChild(container);
+
+  document.documentElement.appendChild(state.overlay);
 }
 
 /**
@@ -280,14 +296,14 @@ function appendOverlayToDOM(card: HTMLElement, usageSection: HTMLElement): void 
  */
 function createOverlay(): void {
   // 既存のオーバーレイが存在するかチェック（DOM内の要素も含む）
-  if (overlay || document.getElementById(OVERLAY_ID)) {
+  if (state.overlay || document.getElementById(OVERLAY_ID)) {
     return;
   }
 
   // 1. オーバーレイベース要素を作成
-  overlay = document.createElement('div');
-  overlay.id = OVERLAY_ID;
-  overlay.style.cssText = `
+  state.overlay = document.createElement('div');
+  state.overlay.id = OVERLAY_ID;
+  state.overlay.style.cssText = `
     position: fixed;
     top: 0;
     left: 0;
@@ -570,8 +586,8 @@ function createXAxis(days: DayData[]): HTMLElement {
  * Phase 2でリファクタリング済み：4つの責務に分解
  */
 function updateUsageChart(): void {
-  if (!overlay) return;
-  const container = overlay.querySelector(`#${SELECTORS.USAGE_CHART_ID}`) as HTMLElement;
+  if (!state.overlay) return;
+  const container = state.overlay.querySelector(`#${SELECTORS.USAGE_CHART_ID}`) as HTMLElement;
   if (!container) return;
   
   StorageManager.getUsageHistory().then((usageHistory: Record<string, number> | null) => {
@@ -596,103 +612,146 @@ function updateUsageChart(): void {
   });
 }
 
+// ===== updateOverlay Helper Types =====
+interface OverlayContext {
+  now: number;
+  unblockUntil: number;
+  isBlocked: boolean;
+  composing: boolean;
+  usingGrok: boolean;
+  active: boolean;
+  isTimeExpired: boolean;
+}
+
+/**
+ * 時間切れかどうかを判定する
+ */
+function checkTimeExpired(isBlocked: boolean, unblockUntil: number): boolean {
+  return (
+    state.lastBlockState === false && // 前回は解除されていた
+    isBlocked && // 今回はブロックされている
+    state.lastUnblockUntil === unblockUntil // 同じ解除セッション内での時間切れ
+  );
+}
+
+/**
+ * オーバーレイを表示すべきかどうかを判定する
+ */
+function shouldShowOverlay(ctx: OverlayContext): boolean {
+  return ctx.isBlocked && ctx.active && !ctx.composing && !ctx.usingGrok;
+}
+
+/**
+ * ブロック中の処理を行う
+ */
+function handleBlockedState(ctx: OverlayContext): void {
+  if (shouldShowOverlay(ctx)) {
+    console.log('[Twitter Blocker] Action: showOverlay (blocked, active, not composing, not Grok)');
+    createOverlay();
+    showOverlay();
+
+    if (ctx.isTimeExpired || state.pendingRedirect) {
+      console.log('[Twitter Blocker] Action: requestRedirect (timeExpired:', ctx.isTimeExpired, 'pendingRedirect:', state.pendingRedirect, ')');
+      state.pendingRedirect = false;
+      requestRedirect();
+    }
+
+    if (state.overlay) {
+      updateUsageChart();
+    }
+  } else {
+    const reason = !ctx.active ? 'inactive' : ctx.composing ? 'composing' : ctx.usingGrok ? 'using Grok' : 'unknown';
+    console.log('[Twitter Blocker] Action: hideOverlay (blocked but', reason, ')');
+    hideOverlay();
+
+    if ((ctx.composing || ctx.usingGrok) && ctx.isTimeExpired) {
+      console.log('[Twitter Blocker] Setting pendingRedirect=true for later');
+      state.pendingRedirect = true;
+    }
+  }
+}
+
+/**
+ * ブロック解除中の処理を行う
+ */
+function handleUnblockedState(): void {
+  console.log('[Twitter Blocker] Action: hideOverlay (unblocked)');
+  hideOverlay();
+  state.pendingRedirect = false;
+}
+
+/**
+ * デバッグログを出力する
+ */
+function logDebugInfo(ctx: OverlayContext): void {
+  console.log('[Twitter Blocker Debug]', {
+    timestamp: new Date().toISOString(),
+    now: ctx.now,
+    unblockUntil: ctx.unblockUntil,
+    isBlocked: ctx.isBlocked,
+    timeDiff: ctx.unblockUntil - ctx.now,
+    active: ctx.active,
+    composing: ctx.composing,
+    usingGrok: ctx.usingGrok,
+    lastBlockState: state.lastBlockState,
+    isTimeExpired: ctx.isTimeExpired,
+    pendingRedirect: state.pendingRedirect,
+    pathname: window.location.pathname
+  });
+
+  if (state.lastBlockState !== undefined && state.lastBlockState !== ctx.isBlocked) {
+    console.log('[Twitter Blocker] State transition:', state.lastBlockState ? 'BLOCKED → UNBLOCKED' : 'UNBLOCKED → BLOCKED');
+  }
+}
+
 function updateOverlay(): void {
   StorageManager.getUnblockUntil().then((unblockUntil: number) => {
     const now = Date.now();
     const isBlocked = now > unblockUntil;
-    const composing = isComposerOpen();
-    const usingGrok = isGrokOpen();
-    const active = isActivePage();
-    
-    // 時間切れ検出：解除状態→ブロック状態への遷移を検出
-    const isTimeExpired =
-      lastBlockState === false &&      // 前回は解除されていた
-      isBlocked &&                     // 今回はブロックされている
-      lastUnblockUntil === unblockUntil;  // 同じ解除セッション内での時間切れ
 
-    // デバッグログ（詳細表示）
-    console.log('[Twitter Blocker Debug]', {
-      timestamp: new Date().toISOString(),
+    const ctx: OverlayContext = {
       now,
       unblockUntil,
       isBlocked,
-      timeDiff: unblockUntil - now,
-      active,
-      composing,
-      usingGrok,
-      lastBlockState,
-      isTimeExpired,
-      pendingRedirect,
-      pathname: window.location.pathname
-    });
+      composing: isComposerOpen(),
+      usingGrok: isGrokOpen(),
+      active: isActivePage(),
+      isTimeExpired: checkTimeExpired(isBlocked, unblockUntil),
+    };
 
-    // 状態遷移のログ
-    if (lastBlockState !== undefined && lastBlockState !== isBlocked) {
-      console.log('[Twitter Blocker] State transition:', lastBlockState ? 'BLOCKED → UNBLOCKED' : 'UNBLOCKED → BLOCKED');
-    }
+    logDebugInfo(ctx);
 
-    if (isBlocked) {
-      // ブロック中でアクティブページかつ投稿/Grok中でない場合のみオーバーレイ表示
-      if (active && !composing && !usingGrok) {
-        console.log('[Twitter Blocker] Action: showOverlay (blocked, active, not composing, not Grok)');
-        createOverlay();
-        showOverlay();
-
-        if (isTimeExpired || pendingRedirect) {
-          console.log('[Twitter Blocker] Action: requestRedirect (timeExpired:', isTimeExpired, 'pendingRedirect:', pendingRedirect, ')');
-          pendingRedirect = false;
-          // Background service worker にリダイレクトリクエストを送信
-          requestRedirect();
-        }
-
-        // チャート更新
-        if (overlay) {
-          updateUsageChart();
-        }
-      } else {
-        // 非アクティブ、投稿中、Grok中はオーバーレイを非表示
-        const reason = !active ? 'inactive' : composing ? 'composing' : usingGrok ? 'using Grok' : 'unknown';
-        console.log('[Twitter Blocker] Action: hideOverlay (blocked but', reason, ')');
-        hideOverlay();
-        if (composing || usingGrok) {
-          if (isTimeExpired) {
-            console.log('[Twitter Blocker] Setting pendingRedirect=true for later');
-            pendingRedirect = true;
-          }
-        }
-      }
+    if (ctx.isBlocked) {
+      handleBlockedState(ctx);
     } else {
-      // ブロック解除中はオーバーレイを隠す
-      console.log('[Twitter Blocker] Action: hideOverlay (unblocked)');
-      hideOverlay();
-      pendingRedirect = false;
+      handleUnblockedState();
     }
-    
+
     // 状態を更新
-    lastBlockState = isBlocked;
-    lastUnblockUntil = unblockUntil;
+    state.lastBlockState = ctx.isBlocked;
+    state.lastUnblockUntil = ctx.unblockUntil;
   }).catch((error: Error) => {
     console.error('Failed to get unblock until time:', error);
   });
 }
 
 function showOverlay(): void {
-  // グローバル変数が未定義の場合はDOMから取得を試みる
-  if (!overlay) {
-    overlay = document.getElementById(OVERLAY_ID);
+  // state.overlay が未定義の場合はDOMから取得を試みる
+  if (!state.overlay) {
+    state.overlay = document.getElementById(OVERLAY_ID);
   }
-  if (overlay) {
-    overlay.style.display = 'flex';
+  if (state.overlay) {
+    state.overlay.style.display = 'flex';
   }
 }
 
 function hideOverlay(): void {
-  // グローバル変数が未定義の場合はDOMから取得を試みる
-  if (!overlay) {
-    overlay = document.getElementById(OVERLAY_ID);
+  // state.overlay が未定義の場合はDOMから取得を試みる
+  if (!state.overlay) {
+    state.overlay = document.getElementById(OVERLAY_ID);
   }
-  if (overlay) {
-    overlay.style.display = 'none';
+  if (state.overlay) {
+    state.overlay.style.display = 'none';
   }
 }
 

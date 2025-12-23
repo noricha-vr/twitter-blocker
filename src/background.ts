@@ -100,7 +100,12 @@ chrome.runtime.onMessage.addListener((
   sendResponse: (response: MessageResponse) => void
 ): boolean | void => {
   if (request.action === 'openRedirectURL') {
-    handleOpenRedirectURL(sender).then(sendResponse);
+    handleOpenRedirectURL(sender)
+      .then(sendResponse)
+      .catch((error: Error) => {
+        addLog('openRedirectURL:unhandledError', { error: error.message });
+        sendResponse({ success: false, error: error.message });
+      });
     return true; // Indicates async response
   }
 

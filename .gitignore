@@ -17,5 +17,5 @@ yarn-error.log*
 
 # Chrome Extension
 *.crx
-*.pem 
-twitter-blocker.zip
+*.pem
+twitter-blocker*.zip

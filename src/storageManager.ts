@@ -65,9 +65,12 @@ export interface StorageOptions {
   callback?: StorageCallback;
 }
 
+// ===== Storage Area Type =====
+type StorageArea = 'sync' | 'local';
+
 /**
  * Chrome Storage API統合マネージャークラス
- * 
+ *
  * 機能:
  * - sync/localストレージの統一インターフェース
  * - エラーハンドリングの標準化
@@ -86,18 +89,29 @@ export class StorageManager {
    */
   static readonly DEFAULTS = DEFAULT_VALUES;
 
+  // ===== Private Helper Methods =====
+
   /**
-   * Chrome Storage Sync APIから値を取得
+   * ストレージエリアを取得
    */
-  static async getSync<K extends keyof StorageData>(
-    keys: K | K[], 
+  private static getStorageArea(area: StorageArea): chrome.storage.StorageArea {
+    return area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+  }
+
+  /**
+   * 共通のget処理
+   */
+  private static async _get<K extends keyof StorageData>(
+    area: StorageArea,
+    keys: K | K[],
     options: StorageOptions = {}
   ): Promise<Pick<StorageData, K>> {
     const { useDefaults = true, callback } = options;
-    
+    const storage = this.getStorageArea(area);
+
     try {
-      const result = await new Promise<{[key: string]: any}>((resolve, reject) => {
-        chrome.storage.sync.get(keys, (data) => {
+      const result = await new Promise<{ [key: string]: unknown }>((resolve, reject) => {
+        storage.get(keys, (data) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
           } else {
@@ -106,10 +120,9 @@ export class StorageManager {
         });
       });
 
-      // デフォルト値の適用
       if (useDefaults) {
         const keysArray = Array.isArray(keys) ? keys : [keys];
-        keysArray.forEach(key => {
+        keysArray.forEach((key) => {
           if (result[key] === undefined && DEFAULT_VALUES[key as keyof StorageData] !== undefined) {
             result[key] = DEFAULT_VALUES[key as keyof StorageData];
           }
@@ -120,156 +133,156 @@ export class StorageManager {
       if (callback) callback(typedResult);
       return typedResult;
     } catch (error) {
-      console.error('StorageManager.getSync error:', error);
+      console.error(`StorageManager._get(${area}) error:`, error);
       const emptyResult = {} as Pick<StorageData, K>;
       if (callback) callback(emptyResult);
       throw error;
     }
+  }
+
+  /**
+   * 共通のset処理
+   */
+  private static async _set<K extends keyof StorageData>(
+    area: StorageArea,
+    data: Pick<StorageData, K>,
+    callback?: StorageCallback<void>
+  ): Promise<void> {
+    const storage = this.getStorageArea(area);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        storage.set(data, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      if (callback) callback();
+    } catch (error) {
+      console.error(`StorageManager._set(${area}) error:`, error);
+      if (callback) callback();
+      throw error;
+    }
+  }
+
+  /**
+   * 共通のremove処理
+   */
+  private static async _remove(
+    area: StorageArea,
+    keys: keyof StorageData | (keyof StorageData)[],
+    callback?: StorageCallback<void>
+  ): Promise<void> {
+    const storage = this.getStorageArea(area);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        storage.remove(keys, () => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      if (callback) callback();
+    } catch (error) {
+      console.error(`StorageManager._remove(${area}) error:`, error);
+      if (callback) callback();
+      throw error;
+    }
+  }
+
+  /**
+   * 共通のclear処理
+   */
+  private static async _clear(area: StorageArea, callback?: StorageCallback<void>): Promise<void> {
+    const storage = this.getStorageArea(area);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        storage.clear(() => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      if (callback) callback();
+    } catch (error) {
+      console.error(`StorageManager._clear(${area}) error:`, error);
+      if (callback) callback();
+      throw error;
+    }
+  }
+
+  // ===== Public API Methods =====
+
+  /**
+   * Chrome Storage Sync APIから値を取得
+   */
+  static async getSync<K extends keyof StorageData>(
+    keys: K | K[],
+    options: StorageOptions = {}
+  ): Promise<Pick<StorageData, K>> {
+    return this._get('sync', keys, options);
   }
 
   /**
    * Chrome Storage Sync APIに値を保存
    */
   static async setSync<K extends keyof StorageData>(
-    data: Pick<StorageData, K>, 
+    data: Pick<StorageData, K>,
     callback?: StorageCallback<void>
   ): Promise<void> {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.storage.sync.set(data, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (callback) callback();
-    } catch (error) {
-      console.error('StorageManager.setSync error:', error);
-      if (callback) callback();
-      throw error;
-    }
+    return this._set('sync', data, callback);
   }
 
   /**
    * Chrome Storage Local APIから値を取得
    */
   static async getLocal<K extends keyof StorageData>(
-    keys: K | K[], 
+    keys: K | K[],
     options: StorageOptions = {}
   ): Promise<Pick<StorageData, K>> {
-    const { useDefaults = true, callback } = options;
-    
-    try {
-      const result = await new Promise<{[key: string]: any}>((resolve, reject) => {
-        chrome.storage.local.get(keys, (data) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve(data);
-          }
-        });
-      });
-
-      // デフォルト値の適用
-      if (useDefaults) {
-        const keysArray = Array.isArray(keys) ? keys : [keys];
-        keysArray.forEach(key => {
-          if (result[key] === undefined && DEFAULT_VALUES[key as keyof StorageData] !== undefined) {
-            result[key] = DEFAULT_VALUES[key as keyof StorageData];
-          }
-        });
-      }
-
-      const typedResult = result as Pick<StorageData, K>;
-      if (callback) callback(typedResult);
-      return typedResult;
-    } catch (error) {
-      console.error('StorageManager.getLocal error:', error);
-      const emptyResult = {} as Pick<StorageData, K>;
-      if (callback) callback(emptyResult);
-      throw error;
-    }
+    return this._get('local', keys, options);
   }
 
   /**
    * Chrome Storage Local APIに値を保存
    */
   static async setLocal<K extends keyof StorageData>(
-    data: Pick<StorageData, K>, 
+    data: Pick<StorageData, K>,
     callback?: StorageCallback<void>
   ): Promise<void> {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.storage.local.set(data, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (callback) callback();
-    } catch (error) {
-      console.error('StorageManager.setLocal error:', error);
-      if (callback) callback();
-      throw error;
-    }
+    return this._set('local', data, callback);
   }
 
   /**
    * Chrome Storage Sync APIから値を削除
    */
   static async removeSync(
-    keys: keyof StorageData | (keyof StorageData)[], 
+    keys: keyof StorageData | (keyof StorageData)[],
     callback?: StorageCallback<void>
   ): Promise<void> {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.storage.sync.remove(keys, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (callback) callback();
-    } catch (error) {
-      console.error('StorageManager.removeSync error:', error);
-      if (callback) callback();
-      throw error;
-    }
+    return this._remove('sync', keys, callback);
   }
 
   /**
    * Chrome Storage Local APIから値を削除
    */
   static async removeLocal(
-    keys: keyof StorageData | (keyof StorageData)[], 
+    keys: keyof StorageData | (keyof StorageData)[],
     callback?: StorageCallback<void>
   ): Promise<void> {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.storage.local.remove(keys, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (callback) callback();
-    } catch (error) {
-      console.error('StorageManager.removeLocal error:', error);
-      if (callback) callback();
-      throw error;
-    }
+    return this._remove('local', keys, callback);
   }
 
   // ===== 特化メソッド =====
@@ -386,46 +399,14 @@ export class StorageManager {
    * 全同期ストレージをクリア（開発・テスト用）
    */
   static async clearAllSync(callback?: StorageCallback<void>): Promise<void> {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.storage.sync.clear(() => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (callback) callback();
-    } catch (error) {
-      console.error('StorageManager.clearAllSync error:', error);
-      if (callback) callback();
-      throw error;
-    }
+    return this._clear('sync', callback);
   }
 
   /**
    * 全ローカルストレージをクリア（開発・テスト用）
    */
   static async clearAllLocal(callback?: StorageCallback<void>): Promise<void> {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        chrome.storage.local.clear(() => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (callback) callback();
-    } catch (error) {
-      console.error('StorageManager.clearAllLocal error:', error);
-      if (callback) callback();
-      throw error;
-    }
+    return this._clear('local', callback);
   }
 }
 
