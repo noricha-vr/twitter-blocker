@@ -34,16 +34,9 @@ const CHECK_INTERVAL_MS = TIMINGS.CHECK_INTERVAL_MS;
 
 function isActivePage(): boolean {
   try {
-    // 【修正4】アクティブページ判定をより厳密に
-    // document.visibilityState === 'visible': タブがアクティブ
-    // document.hasFocus(): ウィンドウがフォーカスされている
-    const isVisible = document.visibilityState === 'visible';
-    const hasFocus = document.hasFocus();
-    
-    // デバッグログ（必要に応じて）
-    console.log('[Twitter Blocker] Active page check:', { isVisible, hasFocus });
-    
-    return isVisible && hasFocus;
+    // タブが表示されているかどうかのみをチェック
+    // document.hasFocus()は削除（ポップアップ開くとフォーカスが移りブロックが消えるため）
+    return document.visibilityState === 'visible';
   } catch (error) {
     console.warn('[Twitter Blocker] Error checking active page:', error);
     // エラー時は保守的にtrueを返す（ブロックを優先）
@@ -583,18 +576,16 @@ function updateOverlay(): void {
     const usingGrok = isGrokOpen();
     const active = isActivePage();
     
-    // デバッグログ
-    console.log('[Twitter Blocker Debug]', {
-      now,
-      unblockUntil,
-      isBlocked,
-      lastBlockState,
-      lastUnblockUntil,
-      composing,
-      usingGrok,
-      active,
-      timeDiff: unblockUntil - now
-    });
+    // デバッグログ（詳細表示）
+    console.log('[Twitter Blocker Debug]',
+      'now:', now,
+      'unblockUntil:', unblockUntil,
+      'isBlocked:', isBlocked,
+      'timeDiff(ms):', unblockUntil - now,
+      'active:', active,
+      'composing:', composing,
+      'usingGrok:', usingGrok
+    );
     
     // 時間切れ検出：解除状態→ブロック状態への遷移を検出
     const isTimeExpired = 

@@ -1,128 +1,66 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Twitter/X.comへのアクセスをブロックし、タイマーで一時解除できるChrome拡張機能（Manifest V3）。
 
-## Project Overview
+## Quick Reference
 
-Twitter Blocker is a Chrome extension (Manifest V3) that blocks access to Twitter/X.com by default and allows temporary unblocking through a user-specified timer. The extension tracks usage history and displays it as a chart on the blocking overlay.
+| 項目 | 値 |
+|------|-----|
+| 言語 | TypeScript |
+| ビルド | `npm run build` |
+| 開発モード | `npm run dev` |
+| パッケージ作成 | `zip -r twitter-blocker.zip dist manifest.json icon -x "*.DS_Store"` |
+| デプロイ先 | [Chrome Web Store](https://chrome.google.com/webstore/devconsole/) |
+| ストアアセット | `store-assets/` |
 
-## Architecture
+## アーキテクチャ
 
-### Core Components
+| コンポーネント | 役割 |
+|---------------|------|
+| `src/contentScript.ts` | ブロックオーバーレイ管理、10秒ごとに状態更新、使用履歴チャート表示 |
+| `src/popup.ts` | 一時解除UI、使用履歴保存、リダイレクトURL設定 |
+| `src/background.ts` | リダイレクト処理、URL検証 |
+| `src/options.ts` | 時間帯設定（未完成機能） |
 
-1. **Content Script (contentScript.js)**
-   - Manages the blocking overlay that covers Twitter/X.com pages
-   - Updates blocking state every 10 seconds
-   - Displays usage history chart on the overlay
-   - Responds to messages from popup to update overlay state
-   - Sends message to background worker when block is activated for redirect
+## データストレージ（Chrome Storage Sync）
 
-2. **Popup (popup.html/popup.js)**
-   - Provides UI for setting temporary unblock duration
-   - Saves usage history with user's local timezone
-   - Stores default unblock duration for convenience
-   - Sends messages to content script to update overlay
-   - Allows setting redirect URL with validation
+| キー | 用途 |
+|------|------|
+| `unblockUntil` | ブロック再開タイムスタンプ |
+| `defaultMinutes` | デフォルト解除時間 |
+| `usageHistory` | 日別使用時間（YYYY-MM-DD → 分） |
+| `redirectURL` | ブロック時のリダイレクト先 |
 
-3. **Options Page (options.html/options.js)**
-   - Currently stores start/end time settings (feature appears incomplete)
-   - Located at chrome-extension://[id]/options.html
+## 実装詳細
 
-4. **Background Service Worker (background.js)**
-   - Handles redirect URL functionality
-   - Opens new tab with configured URL when Twitter is blocked
-   - Validates URLs before opening
+- 日付フォーマット: `sv-SE`ロケール（YYYY-MM-DD）
+- 履歴保持: 30日間（自動クリーンアップ）
+- オーバーレイ: z-index 999999
+- 状態確認: 10秒間隔
 
-### Data Storage
+## 開発手順
 
-Uses Chrome Storage Sync API for:
-- `unblockUntil`: Timestamp when blocking should resume
-- `defaultMinutes`: Last used unblock duration
-- `usageHistory`: Object mapping dates (YYYY-MM-DD) to minutes used
-- `startTime`/`endTime`: Time-based blocking settings (incomplete feature)
-- `redirectURL`: URL to open when Twitter is blocked
+1. `chrome://extensions` を開く
+2. デベロッパーモードを有効化
+3. 「パッケージ化されていない拡張機能を読み込む」でプロジェクトディレクトリを選択
+4. 変更後はリロードボタンをクリック
 
-### Key Implementation Details
+## 手動テスト
 
-- Uses `sv-SE` locale for date formatting (YYYY-MM-DD format)
-- History is kept for 30 days with automatic cleanup
-- Chart displays usage for last 30 days with bar visualization
-- Overlay has highest z-index (999999) to ensure visibility
-- Checks blocking state every 10 seconds
+1. twitter.com / x.com でオーバーレイ表示を確認
+2. ポップアップから一時解除を実行
+3. タイマー終了後の再ブロックを確認
+4. リダイレクトURL設定と動作を確認
 
-## Commands
+## 権限
 
-### TypeScript Development
-```bash
-# Install dependencies
-npm install
+- `storage`: 設定・履歴保存
+- `tabs`: リダイレクト用タブ作成
+- Host: `*://x.com/*`, `*://twitter.com/*`
 
-# Build for production
-npm run build
+## 制約・注意点
 
-# Development mode with watch
-npm run dev
-
-# Clean build artifacts
-npm run clean
-```
-
-### Building and Packaging
-```bash
-# Build TypeScript and create deployment package
-npm run build
-zip -r twitter-blocker.zip dist manifest.json icon -x "*.DS_Store"
-```
-
-### Testing
-```bash
-# No automated tests currently - manual testing required
-# 1. Load unpacked extension in Chrome
-# 2. Navigate to twitter.com or x.com
-# 3. Verify overlay appears
-# 4. Test unblock functionality via popup
-# 5. Wait for timer expiration and verify re-blocking
-# 6. Test redirect URL functionality:
-#    - Set a redirect URL in popup
-#    - Wait for block to activate
-#    - Verify new tab opens with configured URL
-```
-
-### Development
-```bash
-# Load unpacked extension:
-# 1. Open chrome://extensions
-# 2. Enable Developer mode
-# 3. Click "Load unpacked"
-# 4. Select project directory
-
-# Reload extension after changes:
-# Click reload button in chrome://extensions
-```
-
-## Chrome Web Store Deployment
-- Deploy at: https://chrome.google.com/webstore/devconsole/
-- Use generated zip file from build command
-- Store assets are in `store-assets/` directory
-
-## Important Notes
-
-1. **Manifest V3 Constraints**
-   - No persistent background pages
-   - Content scripts run in isolated context
-   - Limited access to Chrome APIs from content scripts
-
-2. **Permissions**
-   - `storage`: For saving settings and usage history
-   - `tabs`: For creating new tabs with redirect URL
-   - Host permissions for `*://x.com/*` and `*://twitter.com/*`
-
-3. **Future Considerations**
-   - Options page has time-based blocking UI but no implementation
-   - Usage statistics could be enhanced with more detailed analytics
-   - Consider implementing service worker for advanced features
-
-4. **Localization**
-   - All user-facing text is in Japanese
-   - Date formatting uses Swedish locale for ISO format
-   - Consider i18n support for broader audience
+- Manifest V3: 永続バックグラウンドページなし、コンテンツスクリプトは分離コンテキスト
+- UIテキスト: 日本語のみ（i18n未対応）
+- 時間帯ブロック機能: UIのみ実装済み（ロジック未実装）
+- **更新時は必ずバージョンを1上げる**（ブラウザで変更反映を確認するため）

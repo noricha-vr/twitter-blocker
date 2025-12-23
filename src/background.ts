@@ -1,36 +1,10 @@
 // Background Service Worker for Twitter Blocker
 
-// Import StorageManager by reading the file content inline
-// This is necessary because service workers have ES6 module limitations
-importScripts('storageManager.js');
-
-// Service Worker環境でのimportScriptsの型定義
-declare function importScripts(...urls: string[]): void;
-
-// Service Worker環境でのStorageManager型定義
-// Note: これはimportScriptsで読み込まれるstorageManager.jsのグローバル変数です
-interface GlobalStorageManager {
-  KEYS: {
-    DEBUG_LOGS: string;
-  };
-  getDebugLogs(): Promise<LogEntry[]>;
-  setDebugLogs(logs: LogEntry[]): Promise<void>;
-  getRedirectURL(): Promise<string | null>;
-  setRedirectURL(url: string): Promise<void>;
-  getRedirectTabMap(): Promise<RedirectTabMap>;
-}
-
-declare const StorageManager: GlobalStorageManager;
-
-interface LogEntry {
-  time: string;
-  event: string;
-  details: Record<string, any>;
-}
+import { StorageManager, DebugLog, RedirectTabMap } from './storageManager';
 
 interface MessageRequest {
   action: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface MessageResponse {
@@ -41,11 +15,7 @@ interface MessageResponse {
   tabId?: number;
   downloadId?: number;
   filename?: string;
-  logs?: LogEntry[];
-}
-
-interface RedirectTabMap {
-  [url: string]: number;
+  logs?: DebugLog[];
 }
 
 // Simple debug logging utilities
@@ -54,12 +24,12 @@ const MAX_LOGS = 2000;
 
 function addLog(event: string, details: Record<string, any> = {}): void {
   try {
-    const entry: LogEntry = {
+    const entry: DebugLog = {
       time: new Date().toISOString(),
       event,
       details,
     };
-    StorageManager.getDebugLogs().then((logs: LogEntry[]) => {
+    StorageManager.getDebugLogs().then((logs: DebugLog[]) => {
       logs.push(entry);
       const trimmed = logs.length > MAX_LOGS ? logs.slice(logs.length - MAX_LOGS) : logs;
       return StorageManager.setDebugLogs(trimmed);
@@ -318,7 +288,7 @@ function focusTab(
 }
 
 function handleDownloadLogs(sendResponse: (response: MessageResponse) => void): void {
-  StorageManager.getDebugLogs().then((logs: LogEntry[]) => {
+  StorageManager.getDebugLogs().then((logs: DebugLog[]) => {
     const content = logs.map((l) => {
       try {
         return `${l.time}\t${l.event}\t${JSON.stringify(l.details)}`;
@@ -357,7 +327,7 @@ function handleClearLogs(sendResponse: (response: MessageResponse) => void): voi
 }
 
 function handleGetLogs(sendResponse: (response: MessageResponse) => void): void {
-  StorageManager.getDebugLogs().then((logs: LogEntry[]) => {
+  StorageManager.getDebugLogs().then((logs: DebugLog[]) => {
     sendResponse({ success: true, logs });
   }).catch((error: Error) => {
     addLog('getLogs:error', { error: error.message });

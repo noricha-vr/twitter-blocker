@@ -1,5 +1,6 @@
 import { COLORS, TIMINGS, SELECTORS, TEXT, VALIDATION } from './constants';
 import { StorageManager } from './storageManager';
+import { injectCSSVariables } from './styleInjector';
 
 interface PopupState {
   minuteInput: HTMLInputElement;
@@ -18,6 +19,9 @@ interface QuickButtonData {
 // StorageManager を使用するため、ローカル定数は削除
 
 document.addEventListener("DOMContentLoaded", () => {
+  // CSS変数を注入
+  injectCSSVariables();
+
   const state = getPopupElements();
   if (!state) {
     console.error('Required popup elements not found');

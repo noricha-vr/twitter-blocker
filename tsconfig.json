@@ -15,8 +15,9 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "allowJs": true,
-    "checkJs": false
+    "checkJs": false,
+    "noEmit": true
   },
   "include": ["src/**/*", "types/**/*"],
-  "exclude": ["node_modules", "dist", "src/background.ts"]
+  "exclude": ["node_modules", "dist"]
 }

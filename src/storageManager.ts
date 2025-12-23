@@ -25,17 +25,13 @@ export interface UsageHistory {
 }
 
 export interface DebugLog {
-  timestamp: number;
-  level: 'debug' | 'info' | 'warn' | 'error';
-  message: string;
-  details?: any;
+  time: string;
+  event: string;
+  details: Record<string, unknown>;
 }
 
 export interface RedirectTabMap {
-  [tabId: string]: {
-    url: string;
-    timestamp: number;
-  };
+  [url: string]: number;
 }
 
 export interface StorageData {
@@ -433,19 +429,3 @@ export class StorageManager {
   }
 }
 
-// エクスポート（Chrome拡張機能のES6モジュール制限対応）
-declare global {
-  interface Window {
-    StorageManager: typeof StorageManager;
-  }
-}
-
-if (typeof window !== 'undefined') {
-  (window as any).StorageManager = StorageManager;
-}
-
-// Node.js環境での利用（将来的なテスト対応）
-declare const exports: any;
-if (typeof exports !== 'undefined') {
-  exports.StorageManager = StorageManager;
-}
