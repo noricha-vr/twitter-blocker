@@ -18,8 +18,59 @@ interface MessageResponse {
   logs?: DebugLog[];
 }
 
-// Simple debug logging utilities
-const LOG_KEY = StorageManager.KEYS.DEBUG_LOGS;
+// ===== Chrome API Promise Wrappers =====
+
+function queryTabs(queryInfo: chrome.tabs.QueryInfo): Promise<chrome.tabs.Tab[]> {
+  return new Promise((resolve) => {
+    chrome.tabs.query(queryInfo, (tabs) => resolve(tabs ?? []));
+  });
+}
+
+function getTab(tabId: number): Promise<chrome.tabs.Tab | null> {
+  return new Promise((resolve) => {
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError || !tab) {
+        resolve(null);
+      } else {
+        resolve(tab);
+      }
+    });
+  });
+}
+
+function createTab(url: string): Promise<chrome.tabs.Tab | null> {
+  return new Promise((resolve) => {
+    chrome.tabs.create({ url }, (tab) => {
+      if (chrome.runtime.lastError || !tab) {
+        resolve(null);
+      } else {
+        resolve(tab);
+      }
+    });
+  });
+}
+
+function updateTab(tabId: number, props: chrome.tabs.UpdateProperties): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.tabs.update(tabId, props, () => {
+      resolve(!chrome.runtime.lastError);
+    });
+  });
+}
+
+function focusWindow(windowId: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    chrome.windows.update(windowId, { focused: true }, () => {
+      resolve(!chrome.runtime.lastError);
+    });
+  });
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ===== Constants =====
 const MAX_LOGS = 2000;
 
 function addLog(event: string, details: Record<string, any> = {}): void {
@@ -44,12 +95,12 @@ function addLog(event: string, details: Record<string, any> = {}): void {
 
 // Listen for messages from content scripts
 chrome.runtime.onMessage.addListener((
-  request: MessageRequest, 
-  sender: chrome.runtime.MessageSender, 
+  request: MessageRequest,
+  sender: chrome.runtime.MessageSender,
   sendResponse: (response: MessageResponse) => void
 ): boolean | void => {
   if (request.action === 'openRedirectURL') {
-    handleOpenRedirectURL(request, sender, sendResponse);
+    handleOpenRedirectURL(sender).then(sendResponse);
     return true; // Indicates async response
   }
 
@@ -69,222 +120,184 @@ chrome.runtime.onMessage.addListener((
   }
 });
 
-function handleOpenRedirectURL(
-  request: MessageRequest,
-  sender: chrome.runtime.MessageSender,
-  sendResponse: (response: MessageResponse) => void
-): void {
+async function handleOpenRedirectURL(
+  sender: chrome.runtime.MessageSender
+): Promise<MessageResponse> {
   const senderTab = sender.tab;
 
   addLog('openRedirectURL:received', {
-    senderTabId: senderTab && senderTab.id,
-    senderActive: senderTab && senderTab.active,
+    senderTabId: senderTab?.id,
+    senderActive: senderTab?.active,
   });
 
   // If we cannot determine the sender tab, skip opening
   if (!senderTab) {
     addLog('openRedirectURL:noSenderTab');
-    sendResponse({ success: true, message: 'No sender tab; skipping redirect' });
-    return;
+    return { success: true, message: 'No sender tab; skipping redirect' };
   }
 
   // Only proceed if the sender tab is the active tab in its window
   if (!senderTab.active) {
     addLog('openRedirectURL:senderNotActive', { senderTabId: senderTab.id });
-    sendResponse({ success: true, message: 'Sender tab not active; skipping redirect' });
-    return;
+    return { success: true, message: 'Sender tab not active; skipping redirect' };
   }
 
   // Ensure the sender tab is also the active tab of the last-focused window
-  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs: chrome.tabs.Tab[]) => {
-    if (chrome.runtime.lastError) {
-      addLog('openRedirectURL:queryError', { error: chrome.runtime.lastError.message });
-      console.error('Error querying tabs:', chrome.runtime.lastError);
-      sendResponse({ success: false, error: chrome.runtime.lastError.message });
-      return;
-    }
+  const tabs = await queryTabs({ active: true, lastFocusedWindow: true });
+  const activeTabInFocusedWindow = tabs[0];
 
-    const activeTabInFocusedWindow = tabs && tabs[0];
-    if (!activeTabInFocusedWindow || activeTabInFocusedWindow.id !== senderTab.id) {
-      addLog('openRedirectURL:senderNotInFocusedWindow', {
-        senderTabId: senderTab.id,
-        activeFocusedTabId: activeTabInFocusedWindow && activeTabInFocusedWindow.id,
-      });
-      sendResponse({ success: true, message: 'Sender tab not in focused window; skipping redirect' });
-      return;
-    }
-
-    // Get the redirect URL from storage
-    StorageManager.getRedirectURL().then((redirectURL: string | null) => {
-      if (redirectURL && redirectURL.trim() !== '') {
-        // Validate URL
-        try {
-          new URL(redirectURL); // Throws if invalid
-
-          addLog('openRedirectURL:validated', { redirectURL });
-
-          // Try to reuse an existing tab for this URL to avoid tab clutter
-          StorageManager.getRedirectTabMap().then((redirectTabMap: RedirectTabMap) => {
-            const existingTabId = redirectTabMap[redirectURL];
-
-            if (existingTabId !== undefined) {
-              handleExistingTab(redirectURL, existingTabId, redirectTabMap, sendResponse);
-            } else {
-              handleNewTab(redirectURL, redirectTabMap, sendResponse);
-            }
-          });
-        } catch (error) {
-          addLog('openRedirectURL:invalidURL', { 
-            redirectURL, 
-            error: error instanceof Error ? error.message : String(error)
-          });
-          console.error('Invalid URL:', redirectURL);
-          sendResponse({ success: false, error: 'Invalid URL format' });
-        }
-      } else {
-        // No redirect URL set, just respond
-        addLog('openRedirectURL:noURLConfigured');
-        sendResponse({ success: true, message: 'No redirect URL configured' });
-      }
+  if (!activeTabInFocusedWindow || activeTabInFocusedWindow.id !== senderTab.id) {
+    addLog('openRedirectURL:senderNotInFocusedWindow', {
+      senderTabId: senderTab.id,
+      activeFocusedTabId: activeTabInFocusedWindow?.id,
     });
-  });
+    return { success: true, message: 'Sender tab not in focused window; skipping redirect' };
+  }
+
+  // Get the redirect URL from storage
+  const redirectURL = await StorageManager.getRedirectURL();
+
+  if (!redirectURL || redirectURL.trim() === '') {
+    addLog('openRedirectURL:noURLConfigured');
+    return { success: true, message: 'No redirect URL configured' };
+  }
+
+  // Validate URL
+  try {
+    new URL(redirectURL);
+  } catch (error) {
+    addLog('openRedirectURL:invalidURL', {
+      redirectURL,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    console.error('Invalid URL:', redirectURL);
+    return { success: false, error: 'Invalid URL format' };
+  }
+
+  addLog('openRedirectURL:validated', { redirectURL });
+
+  // Try to reuse an existing tab for this URL to avoid tab clutter
+  const redirectTabMap = await StorageManager.getRedirectTabMap();
+  const existingTabId = redirectTabMap[redirectURL];
+
+  if (existingTabId !== undefined) {
+    return handleExistingTab(redirectURL, existingTabId, redirectTabMap);
+  }
+  return handleNewTab(redirectURL, redirectTabMap);
 }
 
-function handleExistingTab(
+async function handleExistingTab(
   redirectURL: string,
   existingTabId: number,
-  redirectTabMap: RedirectTabMap,
-  sendResponse: (response: MessageResponse) => void
-): void {
-  chrome.tabs.get(existingTabId, (existingTab: chrome.tabs.Tab) => {
-    if (chrome.runtime.lastError || !existingTab) {
-      addLog('openRedirectURL:storedTabMissing', {
-        existingTabId,
-        error: chrome.runtime.lastError && chrome.runtime.lastError.message,
-      });
-      
-      // Before creating a new one, double-check if any tab already has the same URL (normalized)
-      findTabByUrlLoose(redirectURL, (foundTab: chrome.tabs.Tab | undefined) => {
-        if (foundTab && foundTab.id) {
-          focusTab(foundTab, () => {
-            addLog('openRedirectURL:foundBySearch', { tabId: foundTab.id });
-            redirectTabMap[redirectURL] = foundTab.id!;
-            chrome.storage.local.set({ redirectTabMap }, () => {
-              sendResponse({ success: true, reused: true, tabId: foundTab.id });
-            });
-          });
-        } else {
-          createNewTabWithSentinel(redirectURL, redirectTabMap, sendResponse);
-        }
-      });
-    } else {
-      // Reuse existing tab: activate and focus its window
-      focusTab(existingTab, () => {
-        addLog('openRedirectURL:reusedExistingTab', { reusedTabId: existingTab.id, redirectURL });
-        sendResponse({ success: true, reused: true, tabId: existingTab.id });
-      }, sendResponse);
+  redirectTabMap: RedirectTabMap
+): Promise<MessageResponse> {
+  const existingTab = await getTab(existingTabId);
+
+  if (!existingTab) {
+    addLog('openRedirectURL:storedTabMissing', { existingTabId });
+
+    // Before creating a new one, double-check if any tab already has the same URL (normalized)
+    const foundTab = await findTabByUrlLoose(redirectURL);
+
+    if (foundTab?.id) {
+      const focused = await focusTabAsync(foundTab);
+      if (focused) {
+        addLog('openRedirectURL:foundBySearch', { tabId: foundTab.id });
+        redirectTabMap[redirectURL] = foundTab.id;
+        await StorageManager.setRedirectTabMap(redirectTabMap);
+        return { success: true, reused: true, tabId: foundTab.id };
+      }
     }
-  });
+
+    return createNewTabWithSentinel(redirectURL, redirectTabMap);
+  }
+
+  // Reuse existing tab: activate and focus its window
+  const focused = await focusTabAsync(existingTab);
+  if (focused) {
+    addLog('openRedirectURL:reusedExistingTab', { reusedTabId: existingTab.id, redirectURL });
+    return { success: true, reused: true, tabId: existingTab.id };
+  }
+
+  return { success: false, error: 'Failed to focus existing tab' };
 }
 
-function handleNewTab(
+async function handleNewTab(
   redirectURL: string,
-  redirectTabMap: RedirectTabMap,
-  sendResponse: (response: MessageResponse) => void
-): void {
+  redirectTabMap: RedirectTabMap
+): Promise<MessageResponse> {
   // Either there is no mapping or a previous creator wrote a sentinel (-1)
   if (redirectTabMap[redirectURL] === -1) {
     // Wait briefly, then try to reuse whatever was created
     addLog('openRedirectURL:waitingForCreator', {});
-    setTimeout(() => {
-      chrome.storage.local.get(['redirectTabMap'], (reget: { redirectTabMap?: RedirectTabMap }) => {
-        const map2 = reget.redirectTabMap || {};
-        const tabId2 = map2[redirectURL];
-        
-        if (tabId2 && tabId2 !== -1) {
-          chrome.tabs.get(tabId2, (t2: chrome.tabs.Tab) => {
-            if (chrome.runtime.lastError || !t2) {
-              // Fallback to search
-              findTabByUrlLoose(redirectURL, (found: chrome.tabs.Tab | undefined) => {
-                if (found && found.id) {
-                  focusTab(found, () => {
-                    map2[redirectURL] = found.id!;
-                    chrome.storage.local.set({ redirectTabMap: map2 }, () => {
-                      sendResponse({ success: true, reused: true, tabId: found.id });
-                    });
-                  });
-                } else {
-                  // Creator failed; clear sentinel and create ourselves
-                  delete map2[redirectURL];
-                  chrome.storage.local.set({ redirectTabMap: map2 }, () => {
-                    createAndStoreRedirectTab(redirectURL, sendResponse);
-                  });
-                }
-              });
-            } else {
-              focusTab(t2, () => {
-                sendResponse({ success: true, reused: true, tabId: t2.id });
-              });
-            }
-          });
-        } else {
-          // No tab yet, create now
-          createAndStoreRedirectTab(redirectURL, sendResponse);
+    await delay(300);
+
+    const map2 = await StorageManager.getRedirectTabMap();
+    const tabId2 = map2[redirectURL];
+
+    if (tabId2 && tabId2 !== -1) {
+      const t2 = await getTab(tabId2);
+
+      if (t2) {
+        const focused = await focusTabAsync(t2);
+        if (focused) {
+          return { success: true, reused: true, tabId: t2.id };
         }
-      });
-    }, 300);
-  } else {
-    // No stored tab; create a new one and remember it, with sentinel to avoid races
-    createNewTabWithSentinel(redirectURL, redirectTabMap, sendResponse);
+      }
+
+      // Fallback to search
+      const found = await findTabByUrlLoose(redirectURL);
+      if (found?.id) {
+        const focused = await focusTabAsync(found);
+        if (focused) {
+          map2[redirectURL] = found.id;
+          await StorageManager.setRedirectTabMap(map2);
+          return { success: true, reused: true, tabId: found.id };
+        }
+      }
+
+      // Creator failed; clear sentinel and create ourselves
+      delete map2[redirectURL];
+      await StorageManager.setRedirectTabMap(map2);
+      return createAndStoreRedirectTab(redirectURL);
+    }
+
+    // No tab yet, create now
+    return createAndStoreRedirectTab(redirectURL);
   }
+
+  // No stored tab; create a new one and remember it, with sentinel to avoid races
+  return createNewTabWithSentinel(redirectURL, redirectTabMap);
 }
 
-function createNewTabWithSentinel(
+async function createNewTabWithSentinel(
   redirectURL: string,
-  redirectTabMap: RedirectTabMap,
-  sendResponse: (response: MessageResponse) => void
-): void {
+  redirectTabMap: RedirectTabMap
+): Promise<MessageResponse> {
   redirectTabMap[redirectURL] = -1; // Sentinel value
-  chrome.storage.local.set({ redirectTabMap }, () => {
-    addLog('openRedirectURL:creatingSentinelSet', {});
-    createAndStoreRedirectTab(redirectURL, sendResponse);
-  });
+  await StorageManager.setRedirectTabMap(redirectTabMap);
+  addLog('openRedirectURL:creatingSentinelSet', {});
+  return createAndStoreRedirectTab(redirectURL);
 }
 
-function focusTab(
-  tab: chrome.tabs.Tab,
-  onSuccess: () => void,
-  onError?: (response: MessageResponse) => void
-): void {
+async function focusTabAsync(tab: chrome.tabs.Tab): Promise<boolean> {
   if (!tab.windowId || tab.id === undefined) {
-    if (onError) {
-      onError({ success: false, error: 'Invalid tab data' });
-    }
-    return;
+    return false;
   }
 
-  chrome.windows.update(tab.windowId, { focused: true }, () => {
-    if (chrome.runtime.lastError) {
-      addLog('openRedirectURL:focusExistingError', { error: chrome.runtime.lastError.message });
-      console.error('Error focusing existing tab:', chrome.runtime.lastError);
-      if (onError) {
-        onError({ success: false, error: chrome.runtime.lastError.message });
-      }
-      return;
-    }
+  const windowFocused = await focusWindow(tab.windowId);
+  if (!windowFocused) {
+    addLog('openRedirectURL:focusExistingError', { error: 'Failed to focus window' });
+    return false;
+  }
 
-    chrome.tabs.update(tab.id!, { active: true }, () => {
-      if (chrome.runtime.lastError) {
-        addLog('openRedirectURL:focusExistingError', { error: chrome.runtime.lastError.message });
-        console.error('Error focusing existing tab:', chrome.runtime.lastError);
-        if (onError) {
-          onError({ success: false, error: chrome.runtime.lastError.message });
-        }
-      } else {
-        onSuccess();
-      }
-    });
-  });
+  const tabActivated = await updateTab(tab.id, { active: true });
+  if (!tabActivated) {
+    addLog('openRedirectURL:focusExistingError', { error: 'Failed to activate tab' });
+    return false;
+  }
+
+  return true;
 }
 
 function handleDownloadLogs(sendResponse: (response: MessageResponse) => void): void {
@@ -374,38 +387,27 @@ function normalizeUrlForMatch(urlString: string): string {
   }
 }
 
-function findTabByUrlLoose(
-  urlString: string, 
-  cb: (found?: chrome.tabs.Tab) => void
-): void {
+async function findTabByUrlLoose(urlString: string): Promise<chrome.tabs.Tab | undefined> {
   const target = normalizeUrlForMatch(urlString);
-  chrome.tabs.query({}, (tabs: chrome.tabs.Tab[]) => {
-    const found = tabs.find((t) => {
-      if (!t.url) return false;
-      const cand = normalizeUrlForMatch(t.url);
-      return cand === target;
-    });
-    cb(found);
+  const tabs = await queryTabs({});
+  return tabs.find((t) => {
+    if (!t.url) return false;
+    const cand = normalizeUrlForMatch(t.url);
+    return cand === target;
   });
 }
 
-function createAndStoreRedirectTab(
-  redirectURL: string, 
-  sendResponse: (response: MessageResponse) => void
-): void {
-  chrome.tabs.create({ url: redirectURL }, (tab: chrome.tabs.Tab) => {
-    if (chrome.runtime.lastError || !tab.id) {
-      addLog('openRedirectURL:createError', { error: chrome.runtime.lastError?.message });
-      sendResponse({ success: false, error: chrome.runtime.lastError?.message });
-    } else {
-      chrome.storage.local.get(['redirectTabMap'], (res: { redirectTabMap?: RedirectTabMap }) => {
-        const map = res.redirectTabMap || {};
-        map[redirectURL] = tab.id!;
-        chrome.storage.local.set({ redirectTabMap: map }, () => {
-          addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
-          sendResponse({ success: true, reused: false, tabId: tab.id });
-        });
-      });
-    }
-  });
+async function createAndStoreRedirectTab(redirectURL: string): Promise<MessageResponse> {
+  const tab = await createTab(redirectURL);
+
+  if (!tab?.id) {
+    addLog('openRedirectURL:createError', { error: 'Failed to create tab' });
+    return { success: false, error: 'Failed to create tab' };
+  }
+
+  const map = await StorageManager.getRedirectTabMap();
+  map[redirectURL] = tab.id;
+  await StorageManager.setRedirectTabMap(map);
+  addLog('openRedirectURL:createdNewTab', { newTabId: tab.id, redirectURL });
+  return { success: true, reused: false, tabId: tab.id };
 }

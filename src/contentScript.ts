@@ -373,13 +373,9 @@ function createStatsSection(totalMinutes: number, history: Record<string, number
 }
 
 /**
- * バーチャートとY軸を作成する
+ * Y軸ラベルを作成する
  */
-function createChart(days: DayData[], max: number): HTMLElement {
-  const chartWrapper = document.createElement('div');
-  chartWrapper.style.cssText = 'position: relative;';
-
-  // Y軸ラベル
+function createYAxis(max: number): HTMLElement {
   const yAxisContainer = document.createElement('div');
   yAxisContainer.style.cssText = `
     position: absolute;
@@ -400,7 +396,107 @@ function createChart(days: DayData[], max: number): HTMLElement {
     yAxisContainer.appendChild(tick);
   }
 
-  // グラフ本体
+  return yAxisContainer;
+}
+
+/**
+ * バーの背景色を決定する
+ */
+function getBarBackground(isToday: boolean, isWeekend: boolean): string {
+  if (isToday) {
+    return CSS_UTILS.linearGradient('135deg', [COLORS.CHART_TODAY + ' 0%', COLORS.CHART_TODAY_DARK + ' 100%']);
+  }
+  if (isWeekend) {
+    return CSS_UTILS.linearGradient('135deg', [COLORS.CHART_WEEKEND + ' 0%', COLORS.CHART_WEEKEND_DARK + ' 100%']);
+  }
+  return CSS_UTILS.linearGradient('135deg', [COLORS.CHART_WEEKDAY + ' 0%', COLORS.CHART_WEEKDAY_DARK + ' 100%']);
+}
+
+/**
+ * ツールチップ要素を作成する
+ */
+function createTooltip(d: DayData): HTMLElement {
+  const tooltip = document.createElement('div');
+  tooltip.style.cssText = `
+    position: absolute;
+    bottom: ${SIZES.WIDTH_FULL};
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${COLORS.TOOLTIP_BACKGROUND};
+    color: ${COLORS.TOOLTIP_TEXT};
+    padding: ${SIZES.SPACE_SM} ${SIZES.SPACE_MD};
+    border-radius: ${SIZES.RADIUS_SM};
+    font-size: ${SIZES.FONT_BASE};
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity ${TIMINGS.TOOLTIP_FADE_MS}ms ${TIMINGS.EASE_DEFAULT};
+    margin-bottom: ${SIZES.SPACE_SM};
+    z-index: ${SIZES.Z_INDEX_TOOLTIP};
+  `;
+
+  const [, m, day] = d.date.split('-').map(Number);
+  tooltip.innerHTML = `
+    <div style="font-weight: 600;">${m}月${day}日 (${TEXT.DAY_NAMES[d.dayOfWeek]})</div>
+    <div style="margin-top: ${SIZES.SPACE_XS};">${d.minutes}${TEXT.UNIT_MINUTES}</div>
+  `;
+
+  return tooltip;
+}
+
+/**
+ * 単一のバー要素を作成する
+ */
+function createBar(d: DayData, max: number, isToday: boolean): HTMLElement {
+  const barContainer = document.createElement('div');
+  barContainer.style.cssText = `
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    position: relative;
+    cursor: pointer;
+  `;
+
+  const height = d.minutes > 0 ? Math.max((d.minutes / max) * 100, CHART_CONFIG.BAR_MIN_HEIGHT_PERCENT) : 0;
+  const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
+
+  const bar = document.createElement('div');
+  bar.style.cssText = `
+    width: ${SIZES.WIDTH_FULL};
+    height: ${height}%;
+    background: ${getBarBackground(isToday, isWeekend)};
+    border-radius: ${SIZES.RADIUS_XS} ${SIZES.RADIUS_XS} 0 0;
+    transition: all ${TIMINGS.ANIMATION_NORMAL} ${TIMINGS.EASE_DEFAULT};
+    position: relative;
+  `;
+
+  const tooltip = createTooltip(d);
+
+  // ホバーイベント登録
+  barContainer.addEventListener('mouseenter', () => {
+    bar.style.transform = 'scaleY(1.05)';
+    bar.style.filter = 'brightness(1.1)';
+    tooltip.style.opacity = '1';
+  });
+
+  barContainer.addEventListener('mouseleave', () => {
+    bar.style.transform = 'scaleY(1)';
+    bar.style.filter = 'brightness(1)';
+    tooltip.style.opacity = '0';
+  });
+
+  barContainer.appendChild(bar);
+  barContainer.appendChild(tooltip);
+
+  return barContainer;
+}
+
+/**
+ * グラフ本体コンテナを作成する
+ */
+function createChartContainer(): HTMLElement {
   const chart = document.createElement('div');
   chart.style.cssText = `
     display: flex;
@@ -409,89 +505,33 @@ function createChart(days: DayData[], max: number): HTMLElement {
     gap: ${SIZES.CHART_BAR_GAP};
     padding: ${SIZES.CHART_PADDING};
     background: ${CSS_UTILS.linearGradient('to bottom', [
-      COLORS.CHART_BACKGROUND + ' 0%', 
+      COLORS.CHART_BACKGROUND + ' 0%',
       COLORS.TRANSPARENT + ' 100%'
     ])};
     border-radius: ${SIZES.RADIUS_MD};
   `;
+  return chart;
+}
+
+/**
+ * バーチャートとY軸を作成する
+ */
+function createChart(days: DayData[], max: number): HTMLElement {
+  const chartWrapper = document.createElement('div');
+  chartWrapper.style.cssText = 'position: relative;';
+
+  const yAxis = createYAxis(max);
+  const chart = createChartContainer();
 
   days.forEach((d, index) => {
-    const barContainer = document.createElement('div');
-    barContainer.style.cssText = `
-      flex: 1;
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end;
-      position: relative;
-      cursor: pointer;
-    `;
-
-    const bar = document.createElement('div');
-    const height = d.minutes > 0 ? Math.max((d.minutes / max) * 100, CHART_CONFIG.BAR_MIN_HEIGHT_PERCENT) : 0;
     const isToday = index === days.length - 1;
-    const isWeekend = d.dayOfWeek === 0 || d.dayOfWeek === 6;
-    
-    bar.style.cssText = `
-      width: ${SIZES.WIDTH_FULL};
-      height: ${height}%;
-      background: ${isToday ? 
-        CSS_UTILS.linearGradient('135deg', [COLORS.CHART_TODAY + ' 0%', COLORS.CHART_TODAY_DARK + ' 100%']) : 
-        isWeekend ? 
-        CSS_UTILS.linearGradient('135deg', [COLORS.CHART_WEEKEND + ' 0%', COLORS.CHART_WEEKEND_DARK + ' 100%']) :
-        CSS_UTILS.linearGradient('135deg', [COLORS.CHART_WEEKDAY + ' 0%', COLORS.CHART_WEEKDAY_DARK + ' 100%'])
-      };
-      border-radius: ${SIZES.RADIUS_XS} ${SIZES.RADIUS_XS} 0 0;
-      transition: all ${TIMINGS.ANIMATION_NORMAL} ${TIMINGS.EASE_DEFAULT};
-      position: relative;
-    `;
-
-    // ホバー時のツールチップ
-    const tooltip = document.createElement('div');
-    tooltip.style.cssText = `
-      position: absolute;
-      bottom: ${SIZES.WIDTH_FULL};
-      left: 50%;
-      transform: translateX(-50%);
-      background: ${COLORS.TOOLTIP_BACKGROUND};
-      color: ${COLORS.TOOLTIP_TEXT};
-      padding: ${SIZES.SPACE_SM} ${SIZES.SPACE_MD};
-      border-radius: ${SIZES.RADIUS_SM};
-      font-size: ${SIZES.FONT_BASE};
-      white-space: nowrap;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity ${TIMINGS.TOOLTIP_FADE_MS}ms ${TIMINGS.EASE_DEFAULT};
-      margin-bottom: ${SIZES.SPACE_SM};
-      z-index: ${SIZES.Z_INDEX_TOOLTIP};
-    `;
-    
-    const [y, m, day] = d.date.split('-').map(Number);
-    tooltip.innerHTML = `
-      <div style="font-weight: 600;">${m}月${day}日 (${TEXT.DAY_NAMES[d.dayOfWeek]})</div>
-      <div style="margin-top: ${SIZES.SPACE_XS};">${d.minutes}${TEXT.UNIT_MINUTES}</div>
-    `;
-
-    barContainer.addEventListener('mouseenter', () => {
-      bar.style.transform = 'scaleY(1.05)';
-      bar.style.filter = 'brightness(1.1)';
-      tooltip.style.opacity = '1';
-    });
-
-    barContainer.addEventListener('mouseleave', () => {
-      bar.style.transform = 'scaleY(1)';
-      bar.style.filter = 'brightness(1)';
-      tooltip.style.opacity = '0';
-    });
-
-    barContainer.appendChild(bar);
-    barContainer.appendChild(tooltip);
-    chart.appendChild(barContainer);
+    const barElement = createBar(d, max, isToday);
+    chart.appendChild(barElement);
   });
 
-  chartWrapper.appendChild(yAxisContainer);
+  chartWrapper.appendChild(yAxis);
   chartWrapper.appendChild(chart);
-  
+
   return chartWrapper;
 }
 
