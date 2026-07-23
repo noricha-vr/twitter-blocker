@@ -19,3 +19,6 @@ yarn-error.log*
 *.crx
 *.pem
 twitter-blocker*.zip
+
+# build output
+dist/
