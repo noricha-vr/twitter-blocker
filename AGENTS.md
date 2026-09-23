@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 Twitter/X.comへのアクセスをブロックし、タイマーで一時解除できるChrome拡張機能（Manifest V3）。
 
