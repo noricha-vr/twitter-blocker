@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync, cpSync, readFileSync, writeFileSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, cpSync, readFileSync, writeFileSync, watch as fsWatch } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -134,6 +134,22 @@ async function watch() {
     await Promise.all(contexts.map(ctx => ctx.watch()));
 
     copyAssets();
+
+    // esbuild が見ないアセット（_locales・HTML・CSS・manifest）の変更時にコピーし直す
+    let timer;
+    const recopy = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          copyAssets();
+        } catch (error) {
+          console.error('Asset copy failed:', error);
+        }
+      }, 100);
+    };
+    [join(projectRoot, '_locales'), srcDir, join(projectRoot, 'manifest.json')].forEach(path => {
+      if (existsSync(path)) fsWatch(path, { recursive: true }, recopy);
+    });
     console.log('Watching for changes...');
   } catch (error) {
     console.error('Watch failed:', error);
