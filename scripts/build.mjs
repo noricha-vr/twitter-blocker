@@ -61,6 +61,14 @@ function copyAssets() {
     console.log('Copied: _locales directory');
   }
 
+  // 言語間でメッセージキーが揃っているか検証（不一致はビルド失敗）
+  if (existsSync(localesSrcDir)) {
+    const keysOf = (lang) => Object.keys(JSON.parse(readFileSync(join(localesSrcDir, lang, 'messages.json'), 'utf-8')));
+    const [en, ja] = [keysOf('en'), keysOf('ja')];
+    const diff = [...en.filter(k => !ja.includes(k)), ...ja.filter(k => !en.includes(k))];
+    if (diff.length) throw new Error('_locales の en / ja でキーが揃っていません: ' + diff.join(', '));
+  }
+
   // manifest.jsonをdistにコピー（パスを修正）
   const manifestSrc = join(projectRoot, 'manifest.json');
   const manifestDest = join(distDir, 'manifest.json');

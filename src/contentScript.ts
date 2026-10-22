@@ -74,7 +74,7 @@ function isComposerOpen(): boolean {
     if (!visibleModal) return false;
 
     // モーダル内の投稿本文エディタ（contenteditable=true）が可視である場合のみ、投稿画面とみなす
-    const editor = visibleModal.querySelector('[data-testid="tweetTextarea_0"], [aria-label="ポスト本文"], [role="textbox"][contenteditable="true"]');
+    const editor = visibleModal.querySelector('[data-testid="tweetTextarea_0"], [aria-label="ポスト本文"], [aria-label="Post text"], [role="textbox"][contenteditable="true"]');
     return Boolean(editor && isElementVisible(editor));
   } catch (_) {
     return false;
@@ -370,9 +370,9 @@ function createStatsSection(totalMinutes: number, history: Record<string, number
   const avgMinutes = Math.round(totalMinutes / CHART_CONFIG.DAYS_TO_SHOW);
   const today = new Date();
   const statsData: StatData[] = [
-    { label: TEXT.CHART_TOTAL, value: `${TEXT.MINUTES(totalMinutes)}`, color: COLORS.INFO_BLUE },
-    { label: TEXT.CHART_AVERAGE, value: `${TEXT.MINUTES(avgMinutes)}`, color: COLORS.SUCCESS_GREEN_LIGHT },
-    { label: TEXT.CHART_TODAY, value: `${TEXT.MINUTES(history[today.toLocaleDateString('sv-SE')] || 0)}`, color: COLORS.ERROR_RED }
+    { label: TEXT.CHART_TOTAL, value: TEXT.MINUTES(totalMinutes), color: COLORS.INFO_BLUE },
+    { label: TEXT.CHART_AVERAGE, value: TEXT.MINUTES(avgMinutes), color: COLORS.SUCCESS_GREEN_LIGHT },
+    { label: TEXT.CHART_TODAY, value: TEXT.MINUTES(history[today.toLocaleDateString('sv-SE')] || 0), color: COLORS.ERROR_RED }
   ];
 
   statsData.forEach(stat => {
