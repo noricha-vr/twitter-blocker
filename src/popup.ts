@@ -49,7 +49,8 @@ function setMinutesAndUpdateButtons(
  * data-i18n 属性を持つ要素に、現在の言語の文言を反映する
  */
 function applyI18n(): void {
-  document.documentElement.lang = chrome.i18n.getUILanguage();
+  // 対応言語は ja と en のみ。それ以外は en の文言にフォールバックする
+  document.documentElement.lang = chrome.i18n.getUILanguage().startsWith('ja') ? 'ja' : 'en';
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n as string);
   });
