@@ -1,0 +1,23 @@
+import { chromium } from 'playwright';
+const S=process.argv[2];
+const b=await chromium.launch();
+const p=await b.newPage({viewport:{width:1280,height:800},deviceScaleFactor:3});
+await p.goto('file://'+S+'/h/overlay.html');await p.waitForTimeout(1500);
+await p.addStyleTag({content:'html,body{background:transparent!important}'});
+const info=await p.evaluate(()=>{
+  const ov=[...document.documentElement.children].find(e=>e!==document.head&&e!==document.body&&e.tagName==='DIV')||document.body.lastElementChild;
+  const chart=document.querySelector('[id*=hart],[id*=sage]');
+  const card=chart.parentElement.parentElement;
+  document.querySelectorAll('div').forEach(d=>{const s=getComputedStyle(d);if(s.position==='fixed'){d.style.background='transparent';d.id&&0}});
+  const r=e=>{const x=e.getBoundingClientRect();return {x:x.x,y:x.y,width:x.width,height:x.height}};
+  return {card:r(card),chart:r(chart)};
+});
+console.log(JSON.stringify(info));
+await p.screenshot({path:S+'/img/card.png',clip:info.card,omitBackground:true});
+await p.screenshot({path:S+'/img/chart.png',clip:info.chart,omitBackground:true});
+const q=await b.newPage({viewport:{width:420,height:700},deviceScaleFactor:3});
+await q.goto('file://'+S+'/h/popup.html');await q.waitForTimeout(800);
+const h=await q.evaluate(()=>{const s=[...document.querySelectorAll('.section')].pop().getBoundingClientRect();return s.bottom+20});
+await q.screenshot({path:S+'/img/popup.png',clip:{x:0,y:0,width:360,height:h}});
+console.log('popup',h);
+await b.close();
