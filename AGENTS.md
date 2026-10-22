@@ -10,7 +10,7 @@ Twitter/X.comへのアクセスをブロックし、タイマーで一時解除�
 | ビルド | `npm run build` |
 | 開発（watch） | `npm run dev` |
 | 開発（自動リロード） | `npm run dev:reload`（web-ext使用） |
-| パッケージ作成 | `zip -r twitter-blocker.zip dist manifest.json icon -x "*.DS_Store"` |
+| パッケージ作成 | `(cd dist && zip -r ../twitter-blocker.zip . -x "*.DS_Store" "*.map")`（dist の中身が zip のルートになる。`_locales` を含む） |
 | デプロイ先 | [Chrome Web Store](https://chrome.google.com/webstore/devconsole/) |
 | ストアアセット | `store-assets/` |
 
@@ -62,5 +62,5 @@ Twitter/X.comへのアクセスをブロックし、タイマーで一時解除�
 ## 制約・注意点
 
 - Manifest V3: 永続バックグラウンドページなし、コンテンツスクリプトは分離コンテキスト
-- UIテキスト: 日本語のみ（i18n未対応）
+- UIテキスト: 日本語・英語（`_locales/{en,ja}/messages.json`、`chrome.i18n`。既定は en、ブラウザが日本語なら ja。文言追加は両方のファイルに足す）。options.html（時間帯設定・未使用）は日本語のまま
 - 時間帯ブロック機能: UIのみ実装済み（ロジック未実装）

@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Twitter/X Blocker"
+  },
+  "extDescription": {
+    "message": "Blocks X (Twitter) by default. Unblock it for just the minutes you choose, and see your last 30 days of usage in a chart."
+  },
+  "overlayTitle": {
+    "message": "X (Twitter) is blocked"
+  },
+  "overlaySubMessage": {
+    "message": "Access is restricted right now to help you stay focused"
+  },
+  "overlayInstruction": {
+    "message": "To unblock for a while, click the extension icon and set the time."
+  },
+  "statusBlocked": {
+    "message": "🔒 Blocked"
+  },
+  "statusUnblocked": {
+    "message": "🟢 Unblocked ($1 min left)"
+  },
+  "chartTitle": {
+    "message": "Usage over the last 30 days"
+  },
+  "chartTotal": {
+    "message": "Total"
+  },
+  "chartAverage": {
+    "message": "Daily avg"
+  },
+  "chartToday": {
+    "message": "Today"
+  },
+  "minutesValue": {
+    "message": "$1 min"
+  },
+  "dayNames": {
+    "message": "Sun,Mon,Tue,Wed,Thu,Fri,Sat"
+  },
+  "tooltipDate": {
+    "message": "$3, $1/$2"
+  },
+  "urlSaved": {
+    "message": "✓ Saved"
+  },
+  "urlCleared": {
+    "message": "✓ URL cleared"
+  },
+  "urlInvalid": {
+    "message": "✗ Please enter a valid URL"
+  },
+  "popupUnblockTitle": {
+    "message": "Unblock temporarily"
+  },
+  "popupMinutesAria": {
+    "message": "Minutes to unblock"
+  },
+  "popupUnit": {
+    "message": "min"
+  },
+  "popupUnblockButton": {
+    "message": "Unblock"
+  },
+  "popupUnblockAria": {
+    "message": "Unblock for the specified time"
+  },
+  "popupRedirectTitle": {
+    "message": "Redirect"
+  },
+  "popupRedirectLabel": {
+    "message": "URL to open while blocked (optional)"
+  },
+  "popupSaveUrl": {
+    "message": "Save URL"
+  }
+}

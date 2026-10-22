@@ -1,4 +1,4 @@
-import { COLORS, TIMINGS, SELECTORS, TEXT, VALIDATION } from './constants';
+import { COLORS, TIMINGS, SELECTORS, TEXT, VALIDATION, t } from './constants';
 import { StorageManager } from './storageManager';
 import { injectCSSVariables } from './styleInjector';
 
@@ -43,11 +43,31 @@ function setMinutesAndUpdateButtons(
   updateQuickButtonActiveState(quickButtons, minutes);
 }
 
+// ===== i18n =====
+
+/**
+ * data-i18n 属性を持つ要素に、現在の言語の文言を反映する
+ */
+function applyI18n(): void {
+  // 対応言語は ja と en のみ。それ以外は en の文言にフォールバックする
+  document.documentElement.lang = chrome.i18n.getUILanguage().startsWith('ja') ? 'ja' : 'en';
+  document.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n as string);
+  });
+  document.querySelectorAll<HTMLElement>('[data-i18n-aria]').forEach((el) => {
+    el.setAttribute('aria-label', t(el.dataset.i18nAria as string));
+  });
+  document.querySelectorAll<HTMLButtonElement>('.quick-button').forEach((button) => {
+    button.textContent = TEXT.MINUTES(Number(button.dataset.minutes));
+  });
+}
+
 // ===== Main Initialization =====
 
 document.addEventListener("DOMContentLoaded", () => {
   // CSS変数を注入
   injectCSSVariables();
+  applyI18n();
 
   const state = getPopupElements();
   if (!state) {
@@ -66,7 +86,7 @@ document.addEventListener("DOMContentLoaded", () => {
       
       if (now < unblockUntil) {
         const remainingMinutes = Math.ceil((unblockUntil - now) / 60000);
-        state.statusDiv.innerHTML = TEXT.STATUS_UNBLOCKED.replace('{minutes}', remainingMinutes.toString());
+        state.statusDiv.innerHTML = TEXT.STATUS_UNBLOCKED(remainingMinutes);
         state.statusDiv.style.color = COLORS.SUCCESS_GREEN;
       } else {
         state.statusDiv.innerHTML = TEXT.STATUS_BLOCKED;

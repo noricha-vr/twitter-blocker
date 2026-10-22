@@ -74,7 +74,7 @@ function isComposerOpen(): boolean {
     if (!visibleModal) return false;
 
     // モーダル内の投稿本文エディタ（contenteditable=true）が可視である場合のみ、投稿画面とみなす
-    const editor = visibleModal.querySelector('[data-testid="tweetTextarea_0"], [aria-label="ポスト本文"], [role="textbox"][contenteditable="true"]');
+    const editor = visibleModal.querySelector('[data-testid="tweetTextarea_0"], [aria-label="ポスト本文"], [aria-label="Post text"], [role="textbox"][contenteditable="true"]');
     return Boolean(editor && isElementVisible(editor));
   } catch (_) {
     return false;
@@ -370,9 +370,9 @@ function createStatsSection(totalMinutes: number, history: Record<string, number
   const avgMinutes = Math.round(totalMinutes / CHART_CONFIG.DAYS_TO_SHOW);
   const today = new Date();
   const statsData: StatData[] = [
-    { label: TEXT.CHART_TOTAL, value: `${totalMinutes}${TEXT.UNIT_MINUTES}`, color: COLORS.INFO_BLUE },
-    { label: TEXT.CHART_AVERAGE, value: `${avgMinutes}${TEXT.UNIT_MINUTES}`, color: COLORS.SUCCESS_GREEN_LIGHT },
-    { label: TEXT.CHART_TODAY, value: `${history[today.toLocaleDateString('sv-SE')] || 0}${TEXT.UNIT_MINUTES}`, color: COLORS.ERROR_RED }
+    { label: TEXT.CHART_TOTAL, value: TEXT.MINUTES(totalMinutes), color: COLORS.INFO_BLUE },
+    { label: TEXT.CHART_AVERAGE, value: TEXT.MINUTES(avgMinutes), color: COLORS.SUCCESS_GREEN_LIGHT },
+    { label: TEXT.CHART_TODAY, value: TEXT.MINUTES(history[today.toLocaleDateString('sv-SE')] || 0), color: COLORS.ERROR_RED }
   ];
 
   statsData.forEach(stat => {
@@ -453,8 +453,8 @@ function createTooltip(d: DayData): HTMLElement {
 
   const [, m, day] = d.date.split('-').map(Number);
   tooltip.innerHTML = `
-    <div style="font-weight: 600;">${m}月${day}日 (${TEXT.DAY_NAMES[d.dayOfWeek]})</div>
-    <div style="margin-top: ${SIZES.SPACE_XS};">${d.minutes}${TEXT.UNIT_MINUTES}</div>
+    <div style="font-weight: 600;">${TEXT.TOOLTIP_DATE(m, day, TEXT.DAY_NAMES[d.dayOfWeek])}</div>
+    <div style="margin-top: ${SIZES.SPACE_XS};">${TEXT.MINUTES(d.minutes)}</div>
   `;
 
   return tooltip;

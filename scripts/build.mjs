@@ -1,5 +1,5 @@
 import * as esbuild from 'esbuild';
-import { copyFileSync, mkdirSync, existsSync, cpSync, readFileSync, writeFileSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, cpSync, readFileSync, writeFileSync, watch as fsWatch } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -52,6 +52,21 @@ function copyAssets() {
   if (existsSync(iconSrcDir)) {
     cpSync(iconSrcDir, iconDestDir, { recursive: true });
     console.log('Copied: icon directory');
+  }
+
+  // 多言語メッセージをコピー
+  const localesSrcDir = join(projectRoot, '_locales');
+  if (existsSync(localesSrcDir)) {
+    cpSync(localesSrcDir, join(distDir, '_locales'), { recursive: true });
+    console.log('Copied: _locales directory');
+  }
+
+  // 言語間でメッセージキーが揃っているか検証（不一致はビルド失敗）
+  if (existsSync(localesSrcDir)) {
+    const keysOf = (lang) => Object.keys(JSON.parse(readFileSync(join(localesSrcDir, lang, 'messages.json'), 'utf-8')));
+    const [en, ja] = [keysOf('en'), keysOf('ja')];
+    const diff = [...en.filter(k => !ja.includes(k)), ...ja.filter(k => !en.includes(k))];
+    if (diff.length) throw new Error('_locales の en / ja でキーが揃っていません: ' + diff.join(', '));
   }
 
   // manifest.jsonをdistにコピー（パスを修正）
@@ -119,6 +134,22 @@ async function watch() {
     await Promise.all(contexts.map(ctx => ctx.watch()));
 
     copyAssets();
+
+    // esbuild が見ないアセット（_locales・HTML・CSS・manifest）の変更時にコピーし直す
+    let timer;
+    const recopy = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        try {
+          copyAssets();
+        } catch (error) {
+          console.error('Asset copy failed:', error);
+        }
+      }, 100);
+    };
+    [join(projectRoot, '_locales'), srcDir, join(projectRoot, 'manifest.json')].forEach(path => {
+      if (existsSync(path)) fsWatch(path, { recursive: true }, recopy);
+    });
     console.log('Watching for changes...');
   } catch (error) {
     console.error('Watch failed:', error);

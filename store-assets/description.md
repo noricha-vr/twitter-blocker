@@ -43,7 +43,7 @@ twitter.com と x.com を常にブロックし、使いたい時だけ「何分�
 Block X (Twitter) by default. Unblock it only for the minutes you choose, and see your last 30 days of usage in a chart.
 
 ### Detailed description
-Twitter Blocker helps you cut down the time you lose to X (Twitter).
+Twitter/X Blocker helps you cut down the time you lose to X (Twitter).
 
 It blocks twitter.com and x.com all the time. When you really need it, you pick how many minutes you want, and it goes back to blocked automatically when the time is up, so "just five more minutes" doesn't turn into an hour.
 

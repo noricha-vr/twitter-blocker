@@ -139,7 +139,8 @@ body {
 
 .quick-button {
   flex: 1;
-  padding: var(--space-sm) var(--space-md);
+  white-space: nowrap;
+  padding: var(--space-sm) var(--space-xs);
   font-size: var(--font-md);
   font-weight: 500;
   color: var(--text-secondary);
