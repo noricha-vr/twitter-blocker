@@ -1,12 +1,12 @@
 {
   "extName": {
-    "message": "Twitter Blocker"
+    "message": "Twitter/X Blocker"
   },
   "extDescription": {
     "message": "Blocks X (Twitter) by default. Unblock it for just the minutes you choose, and see your last 30 days of usage in a chart."
   },
   "overlayTitle": {
-    "message": "Twitter is blocked"
+    "message": "X (Twitter) is blocked"
   },
   "overlaySubMessage": {
     "message": "Access is restricted right now to help you stay focused"

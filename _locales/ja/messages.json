@@ -1,12 +1,12 @@
 {
   "extName": {
-    "message": "Twitter Blocker"
+    "message": "Twitter/X Blocker"
   },
   "extDescription": {
     "message": "X（Twitter）を常にブロック。必要な分だけ一時解除でき、直近30日の使用時間をグラフで確認できます。"
   },
   "overlayTitle": {
-    "message": "Twitter はブロック中です"
+    "message": "X (Twitter) はブロック中です"
   },
   "overlaySubMessage": {
     "message": "集中力を保つため、現在アクセスが制限されています"
