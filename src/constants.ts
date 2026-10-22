@@ -175,34 +175,40 @@ export const TIMINGS = {
 } as const;
 
 // ===== Text Content =====
+// 文言は _locales/{en,ja}/messages.json（chrome.i18n）から取得する
+export const t = (key: string, substitutions?: string | string[]): string =>
+  chrome.i18n.getMessage(key, substitutions) || key;
+
 export const TEXT = {
   // Main Messages
-  MAIN_TITLE: 'Twitter はブロック中です',
-  SUB_MESSAGE: '集中力を保つため、現在アクセスが制限されています',
-  INSTRUCTION: '一時的に解除するには、拡張機能アイコンをクリックして時間を設定してください。',
-  
+  get MAIN_TITLE() { return t('overlayTitle'); },
+  get SUB_MESSAGE() { return t('overlaySubMessage'); },
+  get INSTRUCTION() { return t('overlayInstruction'); },
+
   // Status Messages
-  STATUS_BLOCKED: '🔒 現在ブロック中',
-  STATUS_UNBLOCKED: '🟢 解除中（残り{minutes}分）',
-  
+  get STATUS_BLOCKED() { return t('statusBlocked'); },
+  STATUS_UNBLOCKED: (minutes: number): string => t('statusUnblocked', String(minutes)),
+
   // Chart Labels
-  CHART_TITLE: '直近30日間の使用時間',
-  CHART_TOTAL: '合計',
-  CHART_AVERAGE: '1日平均',
-  CHART_TODAY: '今日',
-  
+  get CHART_TITLE() { return t('chartTitle'); },
+  get CHART_TOTAL() { return t('chartTotal'); },
+  get CHART_AVERAGE() { return t('chartAverage'); },
+  get CHART_TODAY() { return t('chartToday'); },
+
   // Units
-  UNIT_MINUTES: '分',
-  UNIT_MINUTES_SHORT: '分',
-  
+  MINUTES: (n: number): string => t('minutesValue', String(n)),
+
   // Day Names
-  DAY_NAMES: ['日', '月', '火', '水', '木', '金', '土'] as const,
-  
+  get DAY_NAMES(): string[] { return t('dayNames').split(','); },
+  TOOLTIP_DATE: (month: number, day: number, dayName: string): string =>
+    t('tooltipDate', [String(month), String(day), dayName]),
+
   // Success/Error Messages
-  URL_SAVED: '✓ 保存しました',
-  URL_CLEARED: '✓ URLをクリアしました',
-  URL_INVALID: '✗ 有効なURLを入力してください',
-} as const;
+  get URL_SAVED() { return t('urlSaved'); },
+  get URL_CLEARED() { return t('urlCleared'); },
+  get URL_INVALID() { return t('urlInvalid'); },
+
+};
 
 // ===== Breakpoints =====
 export const BREAKPOINTS = {

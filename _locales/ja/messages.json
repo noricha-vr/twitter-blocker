@@ -1,0 +1,77 @@
+{
+  "extName": {
+    "message": "Twitter Blocker"
+  },
+  "extDescription": {
+    "message": "X（Twitter）を常にブロック。必要な分だけ一時解除でき、直近30日の使用時間をグラフで確認できます。"
+  },
+  "overlayTitle": {
+    "message": "Twitter はブロック中です"
+  },
+  "overlaySubMessage": {
+    "message": "集中力を保つため、現在アクセスが制限されています"
+  },
+  "overlayInstruction": {
+    "message": "一時的に解除するには、拡張機能アイコンをクリックして時間を設定してください。"
+  },
+  "statusBlocked": {
+    "message": "🔒 現在ブロック中"
+  },
+  "statusUnblocked": {
+    "message": "🟢 解除中（残り$1分）"
+  },
+  "chartTitle": {
+    "message": "直近30日間の使用時間"
+  },
+  "chartTotal": {
+    "message": "合計"
+  },
+  "chartAverage": {
+    "message": "1日平均"
+  },
+  "chartToday": {
+    "message": "今日"
+  },
+  "minutesValue": {
+    "message": "$1分"
+  },
+  "dayNames": {
+    "message": "日,月,火,水,木,金,土"
+  },
+  "tooltipDate": {
+    "message": "$1月$2日 ($3)"
+  },
+  "urlSaved": {
+    "message": "✓ 保存しました"
+  },
+  "urlCleared": {
+    "message": "✓ URLをクリアしました"
+  },
+  "urlInvalid": {
+    "message": "✗ 有効なURLを入力してください"
+  },
+  "popupUnblockTitle": {
+    "message": "一時解除"
+  },
+  "popupMinutesAria": {
+    "message": "解除する分数"
+  },
+  "popupUnit": {
+    "message": "分"
+  },
+  "popupUnblockButton": {
+    "message": "解除"
+  },
+  "popupUnblockAria": {
+    "message": "指定時間で解除"
+  },
+  "popupRedirectTitle": {
+    "message": "リダイレクト設定"
+  },
+  "popupRedirectLabel": {
+    "message": "ブロック時に開くURL（オプション）"
+  },
+  "popupSaveUrl": {
+    "message": "URLを保存"
+  }
+}

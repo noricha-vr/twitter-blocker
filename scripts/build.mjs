@@ -54,6 +54,13 @@ function copyAssets() {
     console.log('Copied: icon directory');
   }
 
+  // 多言語メッセージをコピー
+  const localesSrcDir = join(projectRoot, '_locales');
+  if (existsSync(localesSrcDir)) {
+    cpSync(localesSrcDir, join(distDir, '_locales'), { recursive: true });
+    console.log('Copied: _locales directory');
+  }
+
   // manifest.jsonをdistにコピー（パスを修正）
   const manifestSrc = join(projectRoot, 'manifest.json');
   const manifestDest = join(distDir, 'manifest.json');
